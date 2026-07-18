@@ -1,0 +1,68 @@
+services:
+  postgres:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_DB: quizztine
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql
+
+  web-backend:
+    build:
+      context: ./services/web-backend
+      dockerfile: Dockerfile.dev
+    depends_on:
+      - postgres
+    ports:
+      - "3000:3000"
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/quizztine
+      JWT_SECRET: dev-secret-change-in-production
+      CORS_ORIGIN: http://localhost:5173
+      UPLOAD_DIR: /app/uploads
+      QUIZ_ENGINE_URL: http://quiz-engine:8000
+    volumes:
+      - ./services/web-backend/src:/app/src
+      - ./services/web-backend/prisma:/app/prisma
+      - uploads:/app/uploads
+
+  frontend:
+    build:
+      context: ./services/frontend
+      dockerfile: Dockerfile.dev
+    ports:
+      - "5173:5173"
+    environment:
+      VITE_API_URL: http://localhost:3000
+      VITE_ENGINE_URL: http://localhost:8001
+      VITE_DEFAULT_LANG: fr
+    volumes:
+      - ./services/frontend/public:/app/public
+      - ./services/frontend/src:/app/src
+      - ./services/frontend/index.html:/app/index.html
+      - ./services/frontend/vite.config.ts:/app/vite.config.ts
+      - ./services/frontend/tsconfig.json:/app/tsconfig.json
+      - ./services/frontend/tsconfig.app.json:/app/tsconfig.app.json
+
+  quiz-engine:
+    build:
+      context: ./services/quiz-engine
+      dockerfile: Dockerfile.dev
+    ports:
+      - "8001:8000"
+    environment:
+      QUIZ_ENGINE_HOST: 0.0.0.0
+      QUIZ_ENGINE_PORT: 8000
+      BACKEND_URL: http://web-backend:3000
+      LOG_LEVEL: INFO
+    volumes:
+      - ./services/quiz-engine/src:/app/src
+      - ./services/quiz-engine/tests:/app/tests
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  uploads:

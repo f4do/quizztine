@@ -1,0 +1,158 @@
+generator client {
+  provider = "prisma-client"
+  output   = "./generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum QuestionType {
+  MCQ
+}
+
+enum Role {
+  USER
+  QUIZMASTER
+  QUIZADMIN
+}
+
+enum Difficulty {
+  EASY
+  MEDIUM
+  HARD
+}
+
+enum QuestionVisibility {
+  PUBLIC
+  PRIVATE
+}
+
+model User {
+  id        String   @id @default(uuid())
+  pseudo    String   @unique
+  email     String   @unique
+  password  String
+  role      Role     @default(USER)
+  totpSecret String?
+  totpEnabled Boolean @default(false)
+  emailVerified Boolean @default(false)
+  verificationToken String?
+  language  String @default("fr")
+  theme     String @default("light")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  questions     Question[]
+  reports       QuestionReport[]
+  rooms         Room[]
+  stat          UserStat?
+  themeStats    UserThemeStat[]
+}
+
+model Category {
+  id   Int    @id @default(autoincrement())
+  name String @unique
+}
+
+model Question {
+  id           Int                @id @default(autoincrement())
+  seedKey      String?            @unique
+  questionType QuestionType       @default(MCQ)
+  text         String
+  mediaUrl   String?
+  mediaType  String?            // "audio" | "image" | "video"
+  choices    Json               // [{ text: string, isCorrect: boolean }]
+  explanation String?
+  sourceUrl  String?
+  category   String
+  difficulty Difficulty
+  visibility QuestionVisibility @default(PUBLIC)
+  authorId   String?
+  author     User?              @relation(fields: [authorId], references: [id])
+  createdAt  DateTime           @default(now())
+  updatedAt  DateTime           @updatedAt
+
+  reports    QuestionReport[]
+}
+
+model QuestionReport {
+  id         String   @id @default(uuid())
+  questionId Int
+  question   Question @relation(fields: [questionId], references: [id])
+  reporterId String?
+  reporter   User?    @relation(fields: [reporterId], references: [id])
+  reason     String
+  createdAt  DateTime @default(now())
+}
+
+model Room {
+  id          String      @id @default(uuid())
+  code        String      @unique
+  mode        String      // "solo" | "multi_private" | "multi_public"
+  timer       Int         @default(30)
+  creatorId   String?
+  creator     User?       @relation(fields: [creatorId], references: [id])
+  createdAt   DateTime    @default(now())
+  status      String      @default("waiting") // "waiting" | "playing" | "finished"
+  gameResult  GameResult?
+}
+
+model GameResult {
+  id        String         @id @default(uuid())
+  roomId    String         @unique
+  room      Room           @relation(fields: [roomId], references: [id])
+  mode      String
+  createdAt DateTime       @default(now())
+  scores    PlayerScore[]
+  answers   PlayerAnswer[]
+}
+
+model PlayerScore {
+  id             String     @id @default(uuid())
+  gameResultId   String
+  gameResult     GameResult @relation(fields: [gameResultId], references: [id], onDelete: Cascade)
+  playerId       String
+  nickname       String
+  score          Int
+  streak         Int
+  cumulativeTime Float
+}
+
+model PlayerAnswer {
+  id           String     @id @default(uuid())
+  gameResultId String
+  gameResult   GameResult @relation(fields: [gameResultId], references: [id], onDelete: Cascade)
+  playerId     String
+  questionId   Int
+  correct      Boolean
+  timeSpent    Float
+}
+
+model UserStat {
+  userId      String @id
+  user        User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  gamesPlayed Int    @default(0)
+  totalScore  Int    @default(0)
+}
+
+model UserThemeStat {
+  id            String @id @default(uuid())
+  userId        String
+  user          User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category      String
+  totalAnswered Int    @default(0)
+  correctCount  Int    @default(0)
+
+  @@unique([userId, category])
+}
+
+model RevokedToken {
+  id        String   @id @default(uuid())
+  tokenHash String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([tokenHash])
+  @@index([expiresAt])
+}

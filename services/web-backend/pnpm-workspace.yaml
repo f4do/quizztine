@@ -1,0 +1,14 @@
+packages:
+  - '.'
+
+allowBuilds:
+  bcrypt: true
+  '@prisma/engines': true
+  esbuild: true
+  prisma: true
+
+onlyBuiltDependencies:
+  - bcrypt
+  - '@prisma/engines'
+  - esbuild
+  - prisma

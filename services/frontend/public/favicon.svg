@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80">
+  <!-- Gold TV-show background -->
+  <circle cx="40" cy="40" r="40" fill="#FFD700"/>
+  <!-- Hair -->
+  <path d="M10 36 C8 16, 24 4, 40 4 C56 4, 72 16, 70 36 C76 28, 76 48, 70 58 C74 64, 62 72, 40 72 C18 72, 6 64, 10 58 C4 48, 4 28, 10 36" fill="#8B4513"/>
+  <path d="M16 26 C20 14, 30 8, 40 8 C50 8, 60 14, 64 26" fill="#A0522D"/>
+  <!-- Face -->
+  <ellipse cx="40" cy="44" rx="22" ry="24" fill="#F5D0B0"/>
+  <!-- Eyes -->
+  <ellipse cx="28" cy="38" rx="3.5" ry="4.5" fill="#1a0b1a"/>
+  <ellipse cx="52" cy="38" rx="3.5" ry="4.5" fill="#1a0b1a"/>
+  <!-- Smile -->
+  <path d="M33 52 Q40 58 47 52" stroke="#1a0b1a" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+  <!-- Headset -->
+  <path d="M63 44 C70 44, 70 56, 58 58" stroke="#444" stroke-width="2.5" fill="none"/>
+  <circle cx="57" cy="58" r="4" fill="#333"/>
+  <circle cx="57" cy="58" r="1.8" fill="#777"/>
+</svg>

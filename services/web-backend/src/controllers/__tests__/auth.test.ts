@@ -1,0 +1,158 @@
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+import type { Response } from 'express'
+import { register, refresh, logout } from '../auth.js'
+import { ValidationError, AuthError } from '../../types/errors.js'
+import type { AuthenticatedRequest } from '../../middleware/auth.js'
+
+const { mockFindFirst, mockCreate, mockFindUnique, mockRevokedTokenFindUnique, mockRevokedTokenCreate, mockUserUpdate } =
+  vi.hoisted(() => ({
+    mockFindFirst: vi.fn(),
+    mockCreate: vi.fn(),
+    mockFindUnique: vi.fn(),
+    mockRevokedTokenFindUnique: vi.fn(),
+    mockRevokedTokenCreate: vi.fn(),
+    mockUserUpdate: vi.fn(),
+  }))
+
+vi.mock('../../lib/prisma.js', () => ({
+  prisma: {
+    user: {
+      findFirst: mockFindFirst,
+      create: mockCreate,
+      findUnique: mockFindUnique,
+      update: mockUserUpdate,
+    },
+    revokedToken: {
+      findUnique: mockRevokedTokenFindUnique,
+      create: mockRevokedTokenCreate,
+    },
+  },
+}))
+
+function mockReq(overrides: Record<string, unknown> = {}): AuthenticatedRequest {
+  return {
+    body: {},
+    user: undefined,
+    params: {},
+    query: {},
+    cookies: {},
+    ...overrides,
+  } as unknown as AuthenticatedRequest
+}
+
+function mockRes(): Response {
+  const res: Record<string, unknown> = {}
+  res.status = vi.fn().mockReturnValue(res)
+  res.json = vi.fn().mockReturnValue(res)
+  res.cookie = vi.fn().mockReturnValue(res)
+  res.clearCookie = vi.fn().mockReturnValue(res)
+  return res as unknown as Response
+}
+
+beforeEach(() => {
+  vi.clearAllMocks()
+})
+
+describe('register', () => {
+  it('rejects mismatched password and confirmPassword', async () => {
+    const req = mockReq({
+      body: {
+        pseudo: 'alice',
+        email: 'alice@test.com',
+        password: 'supersecret1234',
+        confirmPassword: 'differentpassword',
+      },
+    })
+    const res = mockRes()
+
+    await expect(register(req, res)).rejects.toThrow(ValidationError)
+    expect(mockFindFirst).not.toHaveBeenCalled()
+    expect(mockCreate).not.toHaveBeenCalled()
+  })
+
+  it('creates user when passwords match', async () => {
+    mockFindFirst.mockResolvedValue(null)
+    mockCreate.mockResolvedValue({ id: 'u1', pseudo: 'alice', email: 'alice@test.com' })
+
+    const req = mockReq({
+      body: {
+        pseudo: 'alice',
+        email: 'alice@test.com',
+        password: 'supersecret1234',
+        confirmPassword: 'supersecret1234',
+      },
+    })
+    const res = mockRes()
+
+    await register(req, res)
+
+    expect(mockFindFirst).toHaveBeenCalled()
+    expect(mockCreate).toHaveBeenCalled()
+    expect(res.status).toHaveBeenCalledWith(201)
+  })
+})
+
+describe('refresh', () => {
+  it('throws AuthError when no refresh token cookie is present', async () => {
+    const req = mockReq({ cookies: {} })
+    const res = mockRes()
+    await expect(refresh(req, res)).rejects.toThrow(AuthError)
+  })
+
+  it('throws AuthError when refresh token is revoked (in blacklist)', async () => {
+    // Mock: token IS found in revokedToken table → isTokenRevoked returns true
+    mockRevokedTokenFindUnique.mockResolvedValue({ tokenHash: 'somehash' })
+
+    const req = mockReq({ cookies: { refresh_token: 'revoked-token' } })
+    const res = mockRes()
+    await expect(refresh(req, res)).rejects.toThrow(AuthError)
+    expect(mockRevokedTokenFindUnique).toHaveBeenCalled()
+  })
+
+  it('throws AuthError when token is not revoked but invalid JWT', async () => {
+    // Token not in blacklist
+    mockRevokedTokenFindUnique.mockResolvedValue(null)
+
+    const req = mockReq({ cookies: { refresh_token: 'not-a-valid-jwt' } })
+    const res = mockRes()
+    // verifyToken will throw because it's not a valid JWT → caught and rethrown as AuthError
+    await expect(refresh(req, res)).rejects.toThrow(AuthError)
+  })
+})
+
+describe('logout', () => {
+  it('clears access_token and refresh_token cookies', async () => {
+    const req = mockReq({ cookies: {} })
+    const res = mockRes()
+
+    await logout(req, res)
+
+    expect(res.clearCookie).toHaveBeenCalledWith('access_token', { path: '/' })
+    expect(res.clearCookie).toHaveBeenCalledWith('refresh_token', { path: '/' })
+    expect(res.json).toHaveBeenCalledWith({ message: 'Logged out' })
+  })
+
+  it('revokes refresh token when present in cookie', async () => {
+    mockRevokedTokenCreate.mockResolvedValue({})
+
+    const req = mockReq({ cookies: { refresh_token: 'some-refresh-token' } })
+    const res = mockRes()
+
+    await logout(req, res)
+
+    expect(mockRevokedTokenCreate).toHaveBeenCalled()
+    expect(res.clearCookie).toHaveBeenCalledWith('access_token', { path: '/' })
+    expect(res.clearCookie).toHaveBeenCalledWith('refresh_token', { path: '/' })
+  })
+
+  it('does not throw when revokeRefreshToken fails (duplicate/already expired)', async () => {
+    mockRevokedTokenCreate.mockRejectedValue(new Error('Duplicate entry'))
+
+    const req = mockReq({ cookies: { refresh_token: 'some-token' } })
+    const res = mockRes()
+
+    // Should not throw — logout swallows revoke errors
+    await expect(logout(req, res)).resolves.toBeUndefined()
+    expect(res.clearCookie).toHaveBeenCalled()
+  })
+})

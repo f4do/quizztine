@@ -1,0 +1,16 @@
+FROM node:26-slim
+
+RUN npm install -g pnpm@latest
+
+WORKDIR /app
+
+COPY pnpm-workspace.yaml package.json pnpm-lock.yaml .npmrc docker-entrypoint.sh prisma.config.ts ./
+COPY prisma ./prisma
+
+RUN apt-get update && apt-get install -y --no-install-recommends python3 make gcc && rm -rf /var/lib/apt/lists/* && pnpm install && pnpm prisma generate
+
+COPY . .
+
+RUN chmod +x docker-entrypoint.sh
+
+CMD ["sh", "docker-entrypoint.sh"]
