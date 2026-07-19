@@ -65,6 +65,14 @@ export async function getQuestion(req: AuthenticatedRequest, res: Response) {
     throw new NotFoundError('Question not found')
   }
 
+  // If ?game=true, strip isCorrect from choices (gameplay mode)
+  if (req.query.game === 'true') {
+    const choices = question.choices as Array<{ text: string; isCorrect: boolean }>
+    const sanitizedChoices = choices.map(({ isCorrect: _, ...rest }) => rest)
+    res.json({ question: { ...question, choices: sanitizedChoices } })
+    return
+  }
+
   res.json({ question })
 }
 

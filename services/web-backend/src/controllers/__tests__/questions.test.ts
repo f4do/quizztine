@@ -264,6 +264,33 @@ describe('getQuestion', () => {
 
     expect(res.json).toHaveBeenCalledWith({ question: otherPrivateQuestion })
   })
+
+  it('strips isCorrect from choices when game=true', async () => {
+    mockFindUnique.mockResolvedValue(publicQuestion)
+
+    const req = mockReq({ params: { id: '1' }, query: { game: 'true' } })
+    const res = mockRes()
+    await getQuestion(req, res)
+
+    const result = (res.json as ReturnType<typeof vi.fn>).mock.calls[0][0]
+    expect(result.question.choices).toEqual([
+      { text: '3' },
+      { text: '4' },
+    ])
+    expect(result.question.choices[0].isCorrect).toBeUndefined()
+    expect(result.question.id).toBe(1)
+    expect(result.question.text).toBe('What is 2+2?')
+  })
+
+  it('returns full question when game query is absent', async () => {
+    mockFindUnique.mockResolvedValue(publicQuestion)
+
+    const req = mockReq({ params: { id: '1' } })
+    const res = mockRes()
+    await getQuestion(req, res)
+
+    expect(res.json).toHaveBeenCalledWith({ question: publicQuestion })
+  })
 })
 
 describe('createQuestion', () => {
