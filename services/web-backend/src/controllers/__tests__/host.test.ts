@@ -1,9 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { listHosts, getActiveHost, getHost, createHost, updateHost, deleteHost } from '../host.js'
+import { listHosts, getActiveHost, getHost, createHost, updateHost, deleteHost, listPhrases, getPhraseContexts, getRandomPhrase, createPhrase, updatePhrase, deletePhrase } from '../host.js'
 import { mockReq, mockRes } from '../../test/utils.js'
 import { AppError } from '../../types/errors.js'
 
-const { mockFindMany, mockFindUnique, mockFindFirst, mockCreate, mockUpdate, mockUpdateMany, mockDelete, mockTransaction } = vi.hoisted(() => ({
+const { mockFindMany, mockFindUnique, mockFindFirst, mockCreate, mockUpdate, mockUpdateMany, mockDelete, mockTransaction, mockHostPhraseFindMany, mockHostPhraseFindUnique, mockHostPhraseFindFirst, mockHostPhraseCreate, mockHostPhraseUpdate, mockHostPhraseDelete } = vi.hoisted(() => ({
   mockFindMany: vi.fn(),
   mockFindUnique: vi.fn(),
   mockFindFirst: vi.fn(),
@@ -12,6 +12,12 @@ const { mockFindMany, mockFindUnique, mockFindFirst, mockCreate, mockUpdate, moc
   mockUpdateMany: vi.fn(),
   mockDelete: vi.fn(),
   mockTransaction: vi.fn(),
+  mockHostPhraseFindMany: vi.fn(),
+  mockHostPhraseFindUnique: vi.fn(),
+  mockHostPhraseFindFirst: vi.fn(),
+  mockHostPhraseCreate: vi.fn(),
+  mockHostPhraseUpdate: vi.fn(),
+  mockHostPhraseDelete: vi.fn(),
 }))
 
 vi.mock('../../lib/prisma.js', () => ({
@@ -24,6 +30,14 @@ vi.mock('../../lib/prisma.js', () => ({
       update: mockUpdate,
       updateMany: mockUpdateMany,
       delete: mockDelete,
+    },
+    hostPhrase: {
+      findMany: mockHostPhraseFindMany,
+      findUnique: mockHostPhraseFindUnique,
+      findFirst: mockHostPhraseFindFirst,
+      create: mockHostPhraseCreate,
+      update: mockHostPhraseUpdate,
+      delete: mockHostPhraseDelete,
     },
     $transaction: mockTransaction,
   },
@@ -320,5 +334,269 @@ describe('deleteHost', () => {
     await expect(deleteHost(req, res)).rejects.toThrow(new AppError(404, 'HOST_NOT_FOUND', 'Host not found'))
     expect(mockFindUnique).toHaveBeenCalledWith({ where: { id: 'nonexistent' } })
     expect(mockDelete).not.toHaveBeenCalled()
+  })
+})
+
+const mockPhrases = [
+  { id: 'p1', context: 'feedback.correct', scope: 'game', lang: 'fr', text: 'Bien joué !', priority: 50, createdAt: new Date('2025-01-01'), updatedAt: new Date('2025-01-01') },
+  { id: 'p2', context: 'feedback.correct', scope: 'game', lang: 'en', text: 'Well done!', priority: 50, createdAt: new Date('2025-01-01'), updatedAt: new Date('2025-01-01') },
+  { id: 'p3', context: 'pre.solo', scope: 'game', lang: 'fr', text: 'Prêt pour le solo ?', priority: 50, createdAt: new Date('2025-01-01'), updatedAt: new Date('2025-01-01') },
+]
+
+describe('listPhrases', () => {
+  it('returns all phrases without filters', async () => {
+    mockHostPhraseFindMany.mockResolvedValue(mockPhrases)
+
+    const req = mockReq()
+    const res = mockRes()
+    await listPhrases(req, res)
+
+    expect(mockHostPhraseFindMany).toHaveBeenCalledWith({
+      where: undefined,
+      orderBy: [{ context: 'asc' }, { priority: 'desc' }],
+    })
+    expect(res.json).toHaveBeenCalledWith({ phrases: mockPhrases })
+  })
+
+  it('filters by context, lang, scope', async () => {
+    mockHostPhraseFindMany.mockResolvedValue([mockPhrases[0]])
+
+    const req = mockReq({ query: { context: 'feedback.correct', lang: 'fr', scope: 'game' } })
+    const res = mockRes()
+    await listPhrases(req, res)
+
+    expect(mockHostPhraseFindMany).toHaveBeenCalledWith({
+      where: { context: 'feedback.correct', lang: 'fr', scope: 'game' },
+      orderBy: [{ context: 'asc' }, { priority: 'desc' }],
+    })
+    expect(res.json).toHaveBeenCalledWith({ phrases: [mockPhrases[0]] })
+  })
+
+  it('returns empty array when no phrases match', async () => {
+    mockHostPhraseFindMany.mockResolvedValue([])
+
+    const req = mockReq({ query: { context: 'nonexistent' } })
+    const res = mockRes()
+    await listPhrases(req, res)
+
+    expect(res.json).toHaveBeenCalledWith({ phrases: [] })
+  })
+})
+
+describe('getPhraseContexts', () => {
+  it('returns all context groups and variables', async () => {
+    const req = mockReq()
+    const res = mockRes()
+    await getPhraseContexts(req, res)
+
+    const result = res.json.mock.calls[0][0]
+    expect(result.contexts).toBeDefined()
+    expect(result.variables).toBeDefined()
+    expect(result.contexts.pre).toContain('pre.solo')
+    expect(result.contexts.feedback).toContain('feedback.correct')
+    expect(result.contexts.game).toContain('question.default')
+    expect(result.contexts.end).toContain('end.winner')
+    expect(result.contexts.site).toContain('home.welcome')
+    const allContexts = Object.values(result.contexts as Record<string, string[]>).flat()
+    expect(allContexts).toHaveLength(50)
+    // Verify a few variables
+    expect(result.variables['question.default']).toEqual(['index', 'total', 'category'])
+    expect(result.variables['end.winner']).toEqual(['pseudo', 'score', 'total', 'correct_count', 'rank'])
+    expect(result.variables['profile.prompt']).toEqual(['pseudo'])
+    expect(result.variables['site.room_created']).toEqual(['code'])
+  })
+})
+
+describe('getRandomPhrase', () => {
+  it('returns a random phrase for matching context and lang', async () => {
+    const frPhrases = mockPhrases.filter(p => p.context === 'feedback.correct' && p.lang === 'fr')
+    mockHostPhraseFindMany.mockResolvedValue(frPhrases)
+
+    const req = mockReq({ query: { context: 'feedback.correct', lang: 'fr' } })
+    const res = mockRes()
+    await getRandomPhrase(req, res)
+
+    expect(mockHostPhraseFindMany).toHaveBeenCalledWith({
+      where: { context: 'feedback.correct', lang: 'fr' },
+    })
+    expect(res.json).toHaveBeenCalledWith({
+      phrase: { id: 'p1', context: 'feedback.correct', text: 'Bien joué !', lang: 'fr' },
+    })
+  })
+
+  it('defaults to fr lang when not provided', async () => {
+    mockHostPhraseFindMany.mockResolvedValue([mockPhrases[0]])
+
+    const req = mockReq({ query: { context: 'feedback.correct' } })
+    const res = mockRes()
+    await getRandomPhrase(req, res)
+
+    expect(mockHostPhraseFindMany).toHaveBeenCalledWith({
+      where: { context: 'feedback.correct', lang: 'fr' },
+    })
+  })
+
+  it('throws 404 when no phrase found', async () => {
+    mockHostPhraseFindMany.mockResolvedValue([])
+
+    const req = mockReq({ query: { context: 'feedback.correct', lang: 'en' } })
+    const res = mockRes()
+
+    await expect(getRandomPhrase(req, res)).rejects.toThrow(
+      new AppError(404, 'PHRASE_NOT_FOUND', 'No phrase found for this context and language'),
+    )
+  })
+
+  it('throws 400 when context is missing', async () => {
+    const req = mockReq({ query: {} })
+    const res = mockRes()
+
+    await expect(getRandomPhrase(req, res)).rejects.toThrow(
+      new AppError(400, 'VALIDATION_ERROR', 'context query parameter is required'),
+    )
+  })
+
+  it('returns different phrases over time when multiple exist', async () => {
+    const multiPhrases = [
+      { id: 'a', context: 'pre.solo', scope: 'game', lang: 'fr', text: 'Phrase A', priority: 50, createdAt: new Date(), updatedAt: new Date() },
+      { id: 'b', context: 'pre.solo', scope: 'game', lang: 'fr', text: 'Phrase B', priority: 50, createdAt: new Date(), updatedAt: new Date() },
+    ]
+    mockHostPhraseFindMany.mockResolvedValue(multiPhrases)
+
+    // Run multiple times and collect results — more than one distinct result over many runs proves randomness
+    const results = new Set<string>()
+    for (let i = 0; i < 20; i++) {
+      const req = mockReq({ query: { context: 'pre.solo', lang: 'fr' } })
+      const res = mockRes()
+      await getRandomPhrase(req, res)
+      const phraseId = res.json.mock.calls[0][0].phrase.id
+      results.add(phraseId)
+    }
+
+    // With 2 phrases and 20 runs, we should see both at least once (prob of missing one: 2 * (1/2)^20 ≈ 0.000002)
+    expect(results.size).toBeGreaterThan(1)
+  })
+})
+
+describe('createPhrase', () => {
+  it('creates a phrase with valid data', async () => {
+    const created = { id: 'new1', context: 'feedback.correct', scope: 'game', lang: 'fr', text: 'Bravo !', priority: 50, createdAt: new Date(), updatedAt: new Date() }
+    mockHostPhraseCreate.mockResolvedValue(created)
+
+    const req = mockReq({ body: { context: 'feedback.correct', lang: 'fr', text: 'Bravo !' } })
+    const res = mockRes()
+    await createPhrase(req, res)
+
+    expect(mockHostPhraseCreate).toHaveBeenCalledWith({
+      data: { context: 'feedback.correct', lang: 'fr', text: 'Bravo !' },
+    })
+    expect(res.status).toHaveBeenCalledWith(201)
+    expect(res.json).toHaveBeenCalledWith({ phrase: created })
+  })
+
+  it('accepts optional priority, scope', async () => {
+    const created = { id: 'new2', context: 'pre.solo', scope: 'site', lang: 'en', text: 'Ready?', priority: 80, createdAt: new Date(), updatedAt: new Date() }
+    mockHostPhraseCreate.mockResolvedValue(created)
+
+    const req = mockReq({
+      body: { context: 'pre.solo', lang: 'en', text: 'Ready?', priority: 80, scope: 'site' },
+    })
+    const res = mockRes()
+    await createPhrase(req, res)
+
+    expect(mockHostPhraseCreate).toHaveBeenCalledWith({
+      data: { context: 'pre.solo', lang: 'en', text: 'Ready?', priority: 80, scope: 'site' },
+    })
+    expect(res.status).toHaveBeenCalledWith(201)
+  })
+
+  it('rejects empty context', async () => {
+    const req = mockReq({ body: { context: '', lang: 'fr', text: 'Bonjour' } })
+    const res = mockRes()
+    await expect(createPhrase(req, res)).rejects.toThrow()
+    expect(mockHostPhraseCreate).not.toHaveBeenCalled()
+  })
+
+  it('rejects invalid lang', async () => {
+    const req = mockReq({ body: { context: 'pre.solo', lang: 'de', text: 'Hallo' } })
+    const res = mockRes()
+    await expect(createPhrase(req, res)).rejects.toThrow()
+    expect(mockHostPhraseCreate).not.toHaveBeenCalled()
+  })
+
+  it('rejects empty text', async () => {
+    const req = mockReq({ body: { context: 'pre.solo', lang: 'fr', text: '' } })
+    const res = mockRes()
+    await expect(createPhrase(req, res)).rejects.toThrow()
+    expect(mockHostPhraseCreate).not.toHaveBeenCalled()
+  })
+})
+
+describe('updatePhrase', () => {
+  const existing = { id: 'p1', context: 'feedback.correct', scope: 'game', lang: 'fr', text: 'Bien joué !', priority: 50, createdAt: new Date(), updatedAt: new Date() }
+
+  it('updates phrase fields (partial)', async () => {
+    mockHostPhraseFindUnique.mockResolvedValue(existing)
+    const updated = { ...existing, text: 'Super !' }
+    mockHostPhraseUpdate.mockResolvedValue(updated)
+
+    const req = mockReq({ params: { id: 'p1' }, body: { text: 'Super !' } })
+    const res = mockRes()
+    await updatePhrase(req, res)
+
+    expect(mockHostPhraseFindUnique).toHaveBeenCalledWith({ where: { id: 'p1' } })
+    expect(mockHostPhraseUpdate).toHaveBeenCalledWith({ where: { id: 'p1' }, data: { text: 'Super !' } })
+    expect(res.json).toHaveBeenCalledWith({ phrase: updated })
+  })
+
+  it('throws 404 when phrase not found', async () => {
+    mockHostPhraseFindUnique.mockResolvedValue(null)
+
+    const req = mockReq({ params: { id: 'nonexistent' }, body: { text: 'Bonjour' } })
+    const res = mockRes()
+
+    await expect(updatePhrase(req, res)).rejects.toThrow(
+      new AppError(404, 'PHRASE_NOT_FOUND', 'Phrase not found'),
+    )
+    expect(mockHostPhraseUpdate).not.toHaveBeenCalled()
+  })
+
+  it('rejects invalid scope', async () => {
+    mockHostPhraseFindUnique.mockResolvedValue(existing)
+
+    const req = mockReq({ params: { id: 'p1' }, body: { scope: 'invalid' } })
+    const res = mockRes()
+
+    await expect(updatePhrase(req, res)).rejects.toThrow()
+    expect(mockHostPhraseUpdate).not.toHaveBeenCalled()
+  })
+})
+
+describe('deletePhrase', () => {
+  const existing = { id: 'p1', context: 'feedback.correct', scope: 'game', lang: 'fr', text: 'Bien joué !', priority: 50, createdAt: new Date(), updatedAt: new Date() }
+
+  it('deletes an existing phrase', async () => {
+    mockHostPhraseFindUnique.mockResolvedValue(existing)
+    mockHostPhraseDelete.mockResolvedValue(existing)
+
+    const req = mockReq({ params: { id: 'p1' } })
+    const res = mockRes()
+    await deletePhrase(req, res)
+
+    expect(mockHostPhraseFindUnique).toHaveBeenCalledWith({ where: { id: 'p1' } })
+    expect(mockHostPhraseDelete).toHaveBeenCalledWith({ where: { id: 'p1' } })
+    expect(res.json).toHaveBeenCalledWith({ message: 'Phrase deleted' })
+  })
+
+  it('throws 404 when phrase not found', async () => {
+    mockHostPhraseFindUnique.mockResolvedValue(null)
+
+    const req = mockReq({ params: { id: 'nonexistent' } })
+    const res = mockRes()
+
+    await expect(deletePhrase(req, res)).rejects.toThrow(
+      new AppError(404, 'PHRASE_NOT_FOUND', 'Phrase not found'),
+    )
+    expect(mockHostPhraseDelete).not.toHaveBeenCalled()
   })
 })

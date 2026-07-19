@@ -25,6 +25,69 @@ const updateHostSchema = z.object({
   isActive: z.boolean().optional(),
 })
 
+const createPhraseSchema = z.object({
+  context: z.string().min(1),
+  lang: z.enum(['fr', 'en']),
+  text: z.string().min(1),
+  priority: z.number().int().optional(),
+  scope: z.enum(['game', 'site']).optional(),
+})
+
+const updatePhraseSchema = z.object({
+  context: z.string().min(1).optional(),
+  lang: z.enum(['fr', 'en']).optional(),
+  text: z.string().min(1).optional(),
+  priority: z.number().int().optional(),
+  scope: z.enum(['game', 'site']).optional(),
+})
+
+const PHRASE_CONTEXTS = {
+  pre: ['pre.solo', 'pre.welcome', 'ready.replay'],
+  game: ['game.first', 'game.last', 'game.media_audio', 'game.media_video', 'question.default', 'question.easy', 'question.hard'],
+  feedback: ['feedback.correct', 'feedback.correct_hard', 'feedback.first_correct', 'feedback.only_correct', 'feedback.correct_first_only', 'feedback.wrong', 'feedback.only_wrong', 'feedback.timeout', 'feedback.streak_3', 'feedback.streak_5', 'feedback.streak_10', 'feedback.last_second', 'feedback.streak_lost'],
+  end: ['end.winner', 'end.second', 'end.third', 'end.last', 'end.low', 'end.default', 'end.perfect', 'end.tie'],
+  site: ['home.welcome', 'home.new_candidate', 'login.welcome', 'register.welcome', 'room_create.welcome', 'profile.prompt', 'train.prompt', 'admin.dashboard', 'admin.question_form', 'error.message', 'site.after_register', 'site.after_login', 'site.after_logout', 'site.after_password_change', 'site.after_account_delete', 'site.room_created', 'site.admin_questions', 'site.admin_users', 'site.admin_categories'],
+}
+
+const PHRASE_VARIABLES: Record<string, string[]> = {
+  'pre.solo': ['pseudo'],
+  'pre.welcome': ['pseudo'],
+  'ready.replay': ['pseudo'],
+  'question.default': ['index', 'total', 'category'],
+  'question.easy': ['index', 'total', 'category'],
+  'question.hard': ['index', 'total', 'category'],
+  'game.first': ['index', 'total', 'pseudo'],
+  'game.last': ['index', 'total', 'pseudo'],
+  'game.media_audio': ['category', 'pseudo'],
+  'game.media_video': ['category', 'pseudo'],
+  'feedback.correct': ['pseudo', 'points', 'score', 'streak'],
+  'feedback.correct_hard': ['pseudo', 'points', 'score'],
+  'feedback.first_correct': ['pseudo', 'points', 'score'],
+  'feedback.only_correct': ['pseudo', 'points', 'score'],
+  'feedback.correct_first_only': ['pseudo', 'points', 'score'],
+  'feedback.wrong': ['pseudo', 'points', 'score'],
+  'feedback.only_wrong': ['pseudo', 'score'],
+  'feedback.timeout': ['pseudo', 'score'],
+  'feedback.streak_3': ['pseudo', 'points', 'streak', 'score'],
+  'feedback.streak_5': ['pseudo', 'points', 'streak', 'score'],
+  'feedback.streak_10': ['pseudo', 'points', 'streak', 'score'],
+  'feedback.last_second': ['pseudo', 'points', 'score'],
+  'feedback.streak_lost': ['pseudo', 'streak', 'score'],
+  'end.second': ['pseudo', 'score', 'total', 'correct_count', 'rank'],
+  'end.third': ['pseudo', 'score', 'total', 'correct_count', 'rank'],
+  'end.last': ['pseudo', 'score', 'total', 'correct_count', 'rank'],
+  'end.low': ['pseudo', 'score', 'total', 'correct_count'],
+  'end.default': ['pseudo', 'score', 'total', 'correct_count', 'rank'],
+  'end.winner': ['pseudo', 'score', 'total', 'correct_count', 'rank'],
+  'end.perfect': ['pseudo', 'score', 'total', 'correct_count'],
+  'end.tie': ['pseudo', 'score', 'rank'],
+  'profile.prompt': ['pseudo'],
+  'site.after_register': ['pseudo'],
+  'site.after_login': ['pseudo'],
+  'site.room_created': ['code'],
+  'site.admin_questions': ['count'],
+}
+
 // GET /host — list all hosts (admin)
 export async function listHosts(_req: AuthenticatedRequest, res: Response) {
   const hosts = await prisma.host.findMany({ orderBy: { createdAt: 'asc' } })
@@ -108,6 +171,78 @@ export async function deleteHost(req: AuthenticatedRequest, res: Response) {
   if (existing.isActive) throw new AppError(400, 'CANNOT_DELETE_ACTIVE_HOST', 'Cannot delete the active host. Activate another host first.')
   await prisma.host.delete({ where: { id } })
   res.json({ message: 'Host deleted' })
+}
+
+// ─── Host Phrase CRUD ───────────────────────────────────────────
+
+// GET /host/phrases — list phrases (admin only)
+export async function listPhrases(req: AuthenticatedRequest, res: Response) {
+  const { context, lang, scope } = req.query as { context?: string; lang?: string; scope?: string }
+
+  const where: Record<string, string> = {}
+  if (context) where.context = context
+  if (lang) where.lang = lang
+  if (scope) where.scope = scope
+
+  const phrases = await prisma.hostPhrase.findMany({
+    where: Object.keys(where).length > 0 ? where : undefined,
+    orderBy: [{ context: 'asc' }, { priority: 'desc' }],
+  })
+  res.json({ phrases })
+}
+
+// GET /host/phrases/contexts — list available context names (admin only)
+export async function getPhraseContexts(_req: AuthenticatedRequest, res: Response) {
+  res.json({ contexts: PHRASE_CONTEXTS, variables: PHRASE_VARIABLES })
+}
+
+// GET /host/phrases/random — pick a random phrase (public)
+export async function getRandomPhrase(req: Request, res: Response) {
+  const context = req.query.context as string | undefined
+  const lang = (req.query.lang as string) || 'fr'
+
+  if (!context) {
+    throw new AppError(400, 'VALIDATION_ERROR', 'context query parameter is required')
+  }
+
+  const phrases = await prisma.hostPhrase.findMany({
+    where: { context, lang },
+  })
+
+  if (phrases.length === 0) {
+    throw new AppError(404, 'PHRASE_NOT_FOUND', 'No phrase found for this context and language')
+  }
+
+  const phrase = phrases[Math.floor(Math.random() * phrases.length)]
+  res.json({ phrase: { id: phrase.id, context: phrase.context, text: phrase.text, lang: phrase.lang } })
+}
+
+// POST /host/phrases — create a phrase (admin)
+export async function createPhrase(req: AuthenticatedRequest, res: Response) {
+  const data = createPhraseSchema.parse(req.body)
+  const phrase = await prisma.hostPhrase.create({ data })
+  res.status(201).json({ phrase })
+}
+
+// PUT /host/phrases/:id — update a phrase (admin)
+export async function updatePhrase(req: AuthenticatedRequest, res: Response) {
+  const id = req.params.id as string
+  const existing = await prisma.hostPhrase.findUnique({ where: { id } })
+  if (!existing) throw new AppError(404, 'PHRASE_NOT_FOUND', 'Phrase not found')
+
+  const data = updatePhraseSchema.parse(req.body)
+  const phrase = await prisma.hostPhrase.update({ where: { id }, data })
+  res.json({ phrase })
+}
+
+// DELETE /host/phrases/:id — delete a phrase (admin)
+export async function deletePhrase(req: AuthenticatedRequest, res: Response) {
+  const id = req.params.id as string
+  const existing = await prisma.hostPhrase.findUnique({ where: { id } })
+  if (!existing) throw new AppError(404, 'PHRASE_NOT_FOUND', 'Phrase not found')
+
+  await prisma.hostPhrase.delete({ where: { id } })
+  res.json({ message: 'Phrase deleted' })
 }
 
 // POST /host/fetch-avatar — download an image from URL and store locally
