@@ -1,7 +1,9 @@
 import express, { type Express } from 'express'
 import cookieParser from 'cookie-parser'
 import cors from 'cors'
+import pinoHttp from 'pino-http'
 import { config } from './config/index.js'
+import logger from './lib/logger.js'
 import healthRouter from './routes/health.js'
 import authRouter from './routes/auth.js'
 import questionRouter from './routes/questions.js'
@@ -16,6 +18,7 @@ import { errorHandler } from './middleware/error-handler.js'
 const app: Express = express()
 
 app.use(cors({ origin: config.corsOrigin, credentials: true }))
+app.use(pinoHttp({ logger }))
 app.use(express.json())
 app.use(cookieParser())
 

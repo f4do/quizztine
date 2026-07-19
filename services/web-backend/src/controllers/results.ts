@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { prisma } from '../lib/prisma.js'
 import { getIO } from '../lib/socket.js'
 import { NotFoundError, ValidationError } from '../types/errors.js'
+import logger from '../lib/logger.js'
 import type { Request, Response } from 'express'
 import type { AuthenticatedRequest } from '../middleware/auth.js'
 
@@ -133,7 +134,7 @@ export async function receiveResults(req: Request, res: Response) {
     return gameResult
   })
 
-  console.log(JSON.stringify({ event: 'room-finished', roomId, scores }))
+  logger.info({ event: 'room-finished', roomId, scores }, 'Room finished')
 
   try {
     getIO().to(`room:${roomId}`).emit('game-finished', {})

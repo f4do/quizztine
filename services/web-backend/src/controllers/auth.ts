@@ -4,6 +4,7 @@ import { signAccessToken, signRefreshToken, verifyToken, hashToken } from '../li
 import { registerSchema, loginSchema } from '../lib/validation.js'
 import { config } from '../config/index.js'
 import { AppError, AuthError, ValidationError } from '../types/errors.js'
+import logger from '../lib/logger.js'
 import type { Response } from 'express'
 import type { AuthenticatedRequest } from '../middleware/auth.js'
 import crypto from 'crypto'
@@ -63,7 +64,7 @@ export async function register(req: AuthenticatedRequest, res: Response) {
   })
 
   // TODO: send verification email with token link
-  console.log(JSON.stringify({ event: 'user-registered', userId: user.id, verificationToken }))
+  logger.info({ event: 'user-registered', userId: user.id, verificationToken }, 'User registered')
 
   res.status(201).json({
     message: 'User registered. Check email for verification link.',
