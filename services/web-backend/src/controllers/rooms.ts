@@ -138,6 +138,16 @@ export async function joinRoom(req: AuthenticatedRequest, res: Response) {
   const roomId = req.params.id as string
   const { player_id, nickname } = req.body as { player_id: string; nickname: string }
   await engineClient.joinRoom(roomId, player_id, nickname)
+
+  // Map authenticated user to player session for stats attribution
+  if (req.user) {
+    await prisma.roomPlayer.upsert({
+      where: { roomId_playerId: { roomId, playerId: player_id } },
+      create: { roomId, playerId: player_id, userId: req.user.id, nickname },
+      update: { userId: req.user.id, nickname },
+    })
+  }
+
   res.json({ status: 'joined' })
 }
 

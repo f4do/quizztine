@@ -14,6 +14,7 @@ vi.mock('../../lib/prisma.js', () => ({
   prisma: {
     question: { findMany: mockFindMany },
     room: { create: mockCreate, delete: mockRoomDelete },
+    roomPlayer: { upsert: vi.fn() },
   },
 }))
 

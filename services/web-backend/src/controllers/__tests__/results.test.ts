@@ -7,8 +7,10 @@ import type { AuthenticatedRequest } from '../../middleware/auth.js'
 const { mockPrisma, mockTxMethods } = vi.hoisted(() => {
   const txMethods = {
     room: { findUnique: vi.fn(), update: vi.fn() },
-    gameResult: { create: vi.fn() },
-    user: { findMany: vi.fn() },
+    gameResult: { create: vi.fn(), deleteMany: vi.fn() },
+    playerScore: { deleteMany: vi.fn() },
+    playerAnswer: { deleteMany: vi.fn() },
+    roomPlayer: { findMany: vi.fn() },
     userStat: { upsert: vi.fn() },
     question: { findMany: vi.fn() },
     userThemeStat: { upsert: vi.fn() },
@@ -61,7 +63,9 @@ describe('receiveResults', () => {
     mockTxMethods.room.findUnique.mockResolvedValue({ id: 'r1', mode: 'solo' })
     mockTxMethods.room.update.mockResolvedValue({})
     mockTxMethods.gameResult.create.mockResolvedValue({ id: 'gr1' })
-    mockTxMethods.user.findMany.mockResolvedValue([{ id: 'u1', pseudo: 'alice' }])
+    mockTxMethods.roomPlayer.findMany.mockResolvedValue([
+      { roomId: 'r1', playerId: 'alice-123', userId: 'u1', nickname: 'alice' },
+    ])
     mockTxMethods.userStat.upsert.mockResolvedValue({})
     mockTxMethods.question.findMany.mockResolvedValue([
       { id: 1, category: 'Science' },
@@ -77,6 +81,7 @@ describe('receiveResults', () => {
     expect(mockTxMethods.room.findUnique).toHaveBeenCalledWith({ where: { id: 'r1' } })
     expect(mockTxMethods.room.update).toHaveBeenCalledWith({ where: { id: 'r1' }, data: { status: 'finished' } })
     expect(mockTxMethods.gameResult.create).toHaveBeenCalled()
+    expect(mockTxMethods.roomPlayer.findMany).toHaveBeenCalled()
     expect(mockTxMethods.userStat.upsert).toHaveBeenCalled()
     expect(mockTxMethods.userThemeStat.upsert).toHaveBeenCalledTimes(2)
     expect(res.json).toHaveBeenCalledWith({ message: 'Results received' })

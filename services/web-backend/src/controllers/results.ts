@@ -42,6 +42,11 @@ export async function receiveResults(req: Request, res: Response) {
 
     await tx.room.update({ where: { id: roomId }, data: { status: 'finished' } })
 
+    // Delete any existing GameResult for this room (e.g., from a previous replay)
+    await tx.playerAnswer.deleteMany({ where: { gameResult: { roomId } } })
+    await tx.playerScore.deleteMany({ where: { gameResult: { roomId } } })
+    await tx.gameResult.deleteMany({ where: { roomId } })
+
     const gameResult = await tx.gameResult.create({
       data: {
         roomId,
@@ -70,15 +75,15 @@ export async function receiveResults(req: Request, res: Response) {
       },
     })
 
-    const nicknames = [...new Set(scores.map(s => s.nickname))]
-    const users = await tx.user.findMany({
-      where: { pseudo: { in: nicknames } },
-      select: { id: true, pseudo: true },
+    // Get userId mapping from RoomPlayer table instead of matching by nickname
+    const playerIds = scores.map(s => s.player_id)
+    const roomPlayers = await tx.roomPlayer.findMany({
+      where: { roomId, playerId: { in: playerIds } },
     })
-    const userByPseudo = new Map(users.map(u => [u.pseudo, u.id]))
+    const userByPlayerId = new Map(roomPlayers.map(rp => [rp.playerId, rp.userId]))
 
     for (const score of scores) {
-      const userId = userByPseudo.get(score.nickname)
+      const userId = userByPlayerId.get(score.player_id)
       if (!userId) continue
       await tx.userStat.upsert({
         where: { userId },
@@ -105,7 +110,7 @@ export async function receiveResults(req: Request, res: Response) {
       for (const answer of answers) {
         const scoreEntry = scores.find(s => s.player_id === answer.player_id)
         if (!scoreEntry) continue
-        const userId = userByPseudo.get(scoreEntry.nickname)
+        const userId = userByPlayerId.get(scoreEntry.player_id)
         if (!userId) continue
         const category = categoryByQuestion.get(answer.question_id)
         if (!category) continue
