@@ -1,4 +1,4 @@
-.PHONY: dev dev-backend dev-frontend dev-engine dev-down build rebuild seed test test-backend test-frontend test-engine lint lint-frontend lint-backend lint-engine typecheck typecheck-frontend typecheck-engine
+.PHONY: dev dev-backend dev-frontend dev-engine dev-down build rebuild seed test test-backend test-frontend test-engine lint lint-frontend lint-backend lint-engine typecheck typecheck-frontend typecheck-engine prod-build prod-up prod-down
 
 dev:
 	docker compose up
@@ -55,3 +55,12 @@ typecheck-frontend:
 
 typecheck-engine:
 	cd services/quiz-engine && mypy src/
+
+prod-build:
+	docker compose -f docker-compose.prod.yml build
+
+prod-up:
+	docker compose -f docker-compose.prod.yml up -d
+
+prod-down:
+	docker compose -f docker-compose.prod.yml down
