@@ -5,10 +5,8 @@ import time
 import uuid
 from typing import Any
 
-import httpx
 from fastapi import APIRouter, BackgroundTasks, status
 
-from src.config import settings
 from src.errors import engine_error
 from src.game_flow import ClassicFlow, GameFlow
 from src.logger import logger
@@ -35,59 +33,6 @@ def _active_players_count(room) -> int:
     return len([p for p in room.players.values() if not p.disconnected])
 
 
-async def _notify_backend(
-    room_id: str,
-    path: str,
-    payload: dict[str, Any] | None = None,
-    max_retries: int = 3,
-) -> None:
-    url = f"{settings.backend_url}/rooms/{room_id}/{path}"
-    last_error: Exception | None = None
-    for attempt in range(max_retries):
-        try:
-            async with httpx.AsyncClient() as client:
-                resp = await client.post(url, json=payload or {}, timeout=5.0)
-                resp.raise_for_status()
-                logger.info(
-                    "backend_notified",
-                    extra={
-                        "room_id": room_id,
-                        "event": path,
-                        "status": resp.status_code,
-                        "attempt": attempt + 1,
-                    },
-                )
-                return
-        except httpx.RequestError as exc:
-            last_error = exc
-            logger.warning(
-                "backend_notify_retry",
-                extra={
-                    "room_id": room_id,
-                    "event": path,
-                    "attempt": attempt + 1,
-                    "error": str(exc),
-                },
-            )
-        except httpx.HTTPStatusError as exc:
-            last_error = exc
-            logger.warning(
-                "backend_notify_retry",
-                extra={
-                    "room_id": room_id,
-                    "event": path,
-                    "attempt": attempt + 1,
-                    "status": exc.response.status_code,
-                },
-            )
-        if attempt < max_retries - 1:
-            await asyncio.sleep(2**attempt)  # exponential backoff: 1s, 2s, 4s
-    logger.error(
-        "backend_notify_failed",
-        extra={"room_id": room_id, "event": path, "error": str(last_error)},
-    )
-
-
 @router.get("/health")
 async def health() -> dict[str, str]:
     return {"status": "ok"}
@@ -96,7 +41,7 @@ async def health() -> dict[str, str]:
 @router.get("/rooms/{room_id}")
 async def get_room(room_id: str) -> dict[str, Any]:
     try:
-        room = store.get_or_raise(room_id)
+        room = await store.get_or_raise(room_id)
     except KeyError:
         raise engine_error(404, "ROOM_NOT_FOUND", f"Room {room_id} not found")
     return {
@@ -128,7 +73,7 @@ async def get_room(room_id: str) -> dict[str, Any]:
 async def create_room(body: CreateRoomRequest) -> CreateRoomResponse:
     room_id = body.id or str(uuid.uuid4())
 
-    room = store.create(room_id, body.questions, body.mode, body.timer, code=body.code or "")
+    room = await store.create(room_id, body.questions, body.mode, body.timer, code=body.code or "")
     if body.creator_player_id:
         room.creator_player_id = body.creator_player_id
 
@@ -154,7 +99,7 @@ async def remove_player(
     room_id: str, player_id: str, background_tasks: BackgroundTasks
 ) -> dict[str, str]:
     try:
-        room = store.get_or_raise(room_id)
+        room = await store.get_or_raise(room_id)
     except KeyError:
         raise engine_error(404, "ROOM_NOT_FOUND", f"Room {room_id} not found")
 
@@ -166,7 +111,7 @@ async def remove_player(
         logger.info("player_removed", extra={"room_id": room_id, "player_id": player_id})
         if room.player_count == 0:
             if not room.creator_player_id or player_id == room.creator_player_id:
-                store.remove(room_id)
+                await store.remove(room_id)
                 logger.info("room_deleted_empty", extra={"room_id": room_id})
     else:
         room.players[player_id].disconnected = True
@@ -180,7 +125,7 @@ async def remove_player(
 @router.post("/rooms/{room_id}/join", response_model=JoinResponse, status_code=status.HTTP_200_OK)
 async def join_room(room_id: str, body: JoinRequest) -> JoinResponse:
     try:
-        room = store.get_or_raise(room_id)
+        room = await store.get_or_raise(room_id)
     except KeyError:
         raise engine_error(404, "ROOM_NOT_FOUND", f"Room {room_id} not found")
 
@@ -219,7 +164,7 @@ async def join_room(room_id: str, body: JoinRequest) -> JoinResponse:
     if room.status != GameStatus.waiting:
         raise engine_error(400, "ROOM_NOT_JOINABLE", "Game already started")
 
-    player = store.add_player(room_id, body.player_id, body.nickname)
+    player = await store.add_player(room_id, body.player_id, body.nickname)
 
     logger.info("player_joined", extra={"room_id": room_id, "player_id": body.player_id})
 
@@ -229,7 +174,7 @@ async def join_room(room_id: str, body: JoinRequest) -> JoinResponse:
 @router.post("/rooms/{room_id}/start", status_code=status.HTTP_200_OK)
 async def start_room(room_id: str, player_id: str = "") -> dict[str, str]:
     try:
-        room = store.get_or_raise(room_id)
+        room = await store.get_or_raise(room_id)
     except KeyError:
         raise engine_error(404, "ROOM_NOT_FOUND", f"Room {room_id} not found")
 
@@ -273,14 +218,14 @@ async def start_room(room_id: str, player_id: str = "") -> dict[str, str]:
 )
 async def current_question(room_id: str, player_id: str) -> CurrentQuestionResponse:
     try:
-        room = store.get_or_raise(room_id)
+        room = await store.get_or_raise(room_id)
     except KeyError:
         raise engine_error(404, "ROOM_NOT_FOUND", f"Room {room_id} not found")
 
     if room.status != GameStatus.playing:
         raise engine_error(400, "GAME_NOT_PLAYING", "Game is not in progress")
 
-    player = store.get_player(room_id, player_id)
+    player = await store.get_player(room_id, player_id)
     if player is None:
         raise engine_error(404, "PLAYER_NOT_FOUND", f"Player {player_id} not in room")
 
@@ -303,14 +248,14 @@ async def submit_answer(
     background_tasks: BackgroundTasks,
 ) -> AnswerResponse:
     try:
-        room = store.get_or_raise(room_id)
+        room = await store.get_or_raise(room_id)
     except KeyError:
         raise engine_error(404, "ROOM_NOT_FOUND", f"Room {room_id} not found")
 
     if room.status != GameStatus.playing:
         raise engine_error(400, "GAME_NOT_PLAYING", "Game is not in progress")
 
-    player = store.get_player(room_id, player_id)
+    player = await store.get_player(room_id, player_id)
     if player is None:
         raise engine_error(404, "PLAYER_NOT_FOUND", f"Player {player_id} not in room")
 
@@ -420,12 +365,12 @@ async def submit_answer(
 @router.post("/rooms/{room_id}/replay", status_code=status.HTTP_200_OK)
 async def replay_room(room_id: str, body: ReplayRequest) -> dict[str, str]:
     try:
-        store.get_or_raise(room_id)
+        await store.get_or_raise(room_id)
     except KeyError:
         raise engine_error(404, "ROOM_NOT_FOUND", f"Room {room_id} not found")
 
     try:
-        store.replay_room(room_id, new_questions=body.questions)
+        await store.replay_room(room_id, new_questions=body.questions)
     except ValueError as exc:
         raise engine_error(400, "NOT_FINISHED", str(exc))
 
@@ -437,7 +382,7 @@ async def replay_room(room_id: str, body: ReplayRequest) -> dict[str, str]:
 @router.get("/rooms/{room_id}/scoreboard")
 async def get_scoreboard(room_id: str) -> list[dict[str, Any]]:
     try:
-        room = store.get_or_raise(room_id)
+        room = await store.get_or_raise(room_id)
     except KeyError:
         raise engine_error(404, "ROOM_NOT_FOUND", f"Room {room_id} not found")
 

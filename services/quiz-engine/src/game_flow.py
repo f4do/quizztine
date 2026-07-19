@@ -5,8 +5,8 @@ import time
 from abc import ABC, abstractmethod
 from typing import Any
 
-from src.config import settings
 from src.logger import logger
+from src.notifications import notify_backend
 from src.room_store import AnswerRecord, GameStatus, RoundAnswer, store
 from src.scoring import ScoreCalculator, ScoreResult, ScoringContext, is_answer_correct
 
@@ -46,7 +46,7 @@ class GameFlow(ABC):
             await self.finish_round(room_id, background_tasks)
 
     async def finish_round(self, room_id: str, background_tasks=None) -> None:
-        room = store.get(room_id)
+        room = await store.get(room_id)
         if room is None or room.status != GameStatus.playing:
             return
         if room.feedback_until is not None:
@@ -65,13 +65,12 @@ class GameFlow(ABC):
                     timeout=True,
                 )
                 room.answered_players.add(player.player_id)
-        results = self._score_round(room)
+        results = await self._score_round(room)
         qstate = room.get_question_state(room.current_question_id())
         correct_choices = qstate.correct_choices if qstate else []
         room.feedback_until = time.time() + FEEDBACK_DELAY
-        from src.routes import _notify_backend
 
-        await _notify_backend(
+        await notify_backend(
             room_id,
             "question-finished",
             {
@@ -95,7 +94,7 @@ class GameFlow(ABC):
                 self._advance_after_feedback(room_id)
             )
 
-    def _score_round(self, room) -> list[dict[str, Any]]:
+    async def _score_round(self, room) -> list[dict[str, Any]]:
         qstate = room.get_question_state(room.current_question_id())
         if qstate is None:
             return []
@@ -162,7 +161,7 @@ class GameFlow(ABC):
             player.score += points
             player.cumulative_time += time_spent
 
-            store.record_answer(
+            await store.record_answer(
                 room.id,
                 AnswerRecord(
                     player_id=ra.player_id,
@@ -191,7 +190,7 @@ class GameFlow(ABC):
         await self.advance_question(room_id)
 
     async def advance_question(self, room_id: str) -> None:
-        room = store.get(room_id)
+        room = await store.get(room_id)
         if room is None or room.status != GameStatus.playing:
             return
 
@@ -213,9 +212,8 @@ class GameFlow(ABC):
                 player.finished = True
             room.status = GameStatus.finished
             await self._send_results(room_id)
-            from src.routes import _notify_backend
 
-            await _notify_backend(room_id, "game-finished", {})
+            await notify_backend(room_id, "game-finished", {})
             logger.info("game_finished", extra={"room_id": room_id})
             return
 
@@ -225,9 +223,7 @@ class GameFlow(ABC):
         room.advance_task = asyncio.create_task(
             self._deadline_task(room_id, room.question_deadline)
         )
-        from src.routes import _notify_backend
-
-        await _notify_backend(
+        await notify_backend(
             room_id,
             "next-question",
             {"question_index": room.current_question_index},
@@ -241,7 +237,7 @@ class GameFlow(ABC):
         sleep_seconds = deadline - time.time()
         if sleep_seconds > 0:
             await asyncio.sleep(sleep_seconds)
-        room = store.get(room_id)
+        room = await store.get(room_id)
         if room is None or room.status != GameStatus.playing:
             return
         if room.feedback_until is not None:
@@ -249,7 +245,7 @@ class GameFlow(ABC):
         await self.finish_round(room_id)
 
     async def _send_results(self, room_id: str, max_retries: int = 3) -> None:
-        room = store.get(room_id)
+        room = await store.get(room_id)
         if room is None:
             return
 
@@ -282,53 +278,7 @@ class GameFlow(ABC):
         ]
 
         payload = ResultsCallback(scores=scores, answers=answers)
-
-        import httpx
-
-        url = f"{settings.backend_url}/rooms/{room_id}/results"
-        last_error: Exception | None = None
-        for attempt in range(max_retries):
-            try:
-                async with httpx.AsyncClient() as client:
-                    resp = await client.post(
-                        url, json=payload.model_dump(), timeout=5.0
-                    )
-                    resp.raise_for_status()
-                    logger.info(
-                        "results_sent",
-                        extra={
-                            "room_id": room_id,
-                            "status": resp.status_code,
-                            "attempt": attempt + 1,
-                        },
-                    )
-                    return
-            except httpx.RequestError as exc:
-                last_error = exc
-                logger.warning(
-                    "results_send_retry",
-                    extra={
-                        "room_id": room_id,
-                        "attempt": attempt + 1,
-                        "error": str(exc),
-                    },
-                )
-            except httpx.HTTPStatusError as exc:
-                last_error = exc
-                logger.warning(
-                    "results_send_retry",
-                    extra={
-                        "room_id": room_id,
-                        "attempt": attempt + 1,
-                        "status": exc.response.status_code,
-                    },
-                )
-            if attempt < max_retries - 1:
-                await asyncio.sleep(2**attempt)
-        logger.error(
-            "results_send_failed",
-            extra={"room_id": room_id, "error": str(last_error)},
-        )
+        await notify_backend(room_id, "results", payload.model_dump())
 
 
 class ClassicFlow(GameFlow):

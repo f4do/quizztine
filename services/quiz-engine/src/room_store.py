@@ -1,7 +1,7 @@
 from __future__ import annotations
 
+import asyncio
 import random
-import threading
 from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import TYPE_CHECKING
@@ -122,9 +122,9 @@ class Room:
 class RoomStore:
     def __init__(self) -> None:
         self._rooms: dict[str, Room] = {}
-        self._lock = threading.Lock()
+        self._lock = asyncio.Lock()
 
-    def create(
+    async def create(
         self,
         room_id: str,
         questions: list[QuestionPayload],
@@ -142,39 +142,39 @@ class RoomStore:
             for q in questions
         ]
         room = Room(id=room_id, questions=qs, mode=mode, timer=timer, code=code)
-        with self._lock:
+        async with self._lock:
             self._rooms[room_id] = room
         return room
 
-    def get(self, room_id: str) -> Room | None:
-        with self._lock:
+    async def get(self, room_id: str) -> Room | None:
+        async with self._lock:
             return self._rooms.get(room_id)
 
-    def get_or_raise(self, room_id: str) -> Room:
-        room = self.get(room_id)
+    async def get_or_raise(self, room_id: str) -> Room:
+        room = await self.get(room_id)
         if room is None:
             raise KeyError(f"Room {room_id} not found")
         return room
 
-    def add_player(self, room_id: str, player_id: str, nickname: str) -> Player:
-        room = self.get_or_raise(room_id)
+    async def add_player(self, room_id: str, player_id: str, nickname: str) -> Player:
+        room = await self.get_or_raise(room_id)
         player = Player(player_id=player_id, nickname=nickname)
-        with self._lock:
+        async with self._lock:
             room.players[player_id] = player
         return player
 
-    def get_player(self, room_id: str, player_id: str) -> Player | None:
-        room = self.get(room_id)
+    async def get_player(self, room_id: str, player_id: str) -> Player | None:
+        room = await self.get(room_id)
         if room is None:
             return None
         return room.players.get(player_id)
 
-    def record_answer(self, room_id: str, record: AnswerRecord) -> None:
-        room = self.get_or_raise(room_id)
-        with self._lock:
+    async def record_answer(self, room_id: str, record: AnswerRecord) -> None:
+        room = await self.get_or_raise(room_id)
+        async with self._lock:
             room.answers.append(record)
 
-    def replay_room(
+    async def replay_room(
         self,
         room_id: str,
         new_questions: list[QuestionPayload] | None = None,
@@ -182,11 +182,11 @@ class RoomStore:
         """Reset a finished room to waiting state so it can be replayed.
         If new_questions is provided, replace the question pool.
         """
-        room = self.get_or_raise(room_id)
+        room = await self.get_or_raise(room_id)
         if room.status != GameStatus.finished:
             raise ValueError(f"Room {room_id} is not finished (status={room.status})")
 
-        with self._lock:
+        async with self._lock:
             if new_questions is not None:
                 room.questions = [
                     QuestionState(
@@ -220,13 +220,12 @@ class RoomStore:
 
         return room
 
-    def remove(self, room_id: str) -> None:
-        with self._lock:
+    async def remove(self, room_id: str) -> None:
+        async with self._lock:
             self._rooms.pop(room_id, None)
 
-    @property
-    def room_count(self) -> int:
-        with self._lock:
+    async def room_count(self) -> int:
+        async with self._lock:
             return len(self._rooms)
 
 

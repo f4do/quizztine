@@ -21,7 +21,7 @@ def _disable_backend_network(monkeypatch):
     async def _noop(*args, **kwargs):
         pass
 
-    monkeypatch.setattr(routes, "_notify_backend", _noop)
+    monkeypatch.setattr(game_flow, "notify_backend", _noop)
     monkeypatch.setattr(routes.flow, "_send_results", _noop)
     monkeypatch.setattr(game_flow, "FEEDBACK_DELAY", 0.0)
 

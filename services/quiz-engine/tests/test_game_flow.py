@@ -136,7 +136,7 @@ class TestSoloTimeout:
         # We'll monkeypatch question_deadline to be immediate for the next test.
         pass
 
-    def test_late_answer_after_round_finished(self, client):
+    async def test_late_answer_after_round_finished(self, client):
         """Solo: answer arrives after the round is already scored → gets timeout 200."""
         from src.room_store import store
 
@@ -153,7 +153,7 @@ class TestSoloTimeout:
 
         # Manually simulate: deadline_task finished the round already
         # Set feedback_until (as if finish_round already ran) and mark player as answered
-        r = store.get(rid)
+        r = await store.get(rid)
         assert r is not None
         r.feedback_until = time.time() + 5.0
         r.answered_players.add("p1")
@@ -278,6 +278,7 @@ class TestSoloBackendCallbacks:
 
     def test_notify_called_on_answer(self, client, monkeypatch):
         """question-finished and next-question are called during solo game."""
+        import src.game_flow as game_flow
         import src.routes as routes
 
         calls = []
@@ -287,7 +288,7 @@ class TestSoloBackendCallbacks:
         async def noop_send(*a, **kw):
             pass
 
-        monkeypatch.setattr(routes, "_notify_backend", track_calls)
+        monkeypatch.setattr(game_flow, "notify_backend", track_calls)
         monkeypatch.setattr(routes.flow, "_send_results", noop_send)
 
         payload = {
@@ -418,13 +419,14 @@ class TestSoloBackendCallbacks:
 
     def test_notify_called_on_answer(self, client, monkeypatch):
         """question-finished and next-question are called during solo game."""
+        import src.game_flow as game_flow
         import src.routes as routes
 
         calls = []
         async def track_calls(room_id: str, path: str, payload: dict | None = None, max_retries: int = 3):
             calls.append((path, room_id))
 
-        monkeypatch.setattr(routes, "_notify_backend", track_calls)
+        monkeypatch.setattr(game_flow, "notify_backend", track_calls)
         async def noop(*a, **kw): pass
         monkeypatch.setattr(routes.flow, "_send_results", noop)
 

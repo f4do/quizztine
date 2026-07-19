@@ -212,7 +212,7 @@ class TestSynchronizedRounds:
         import src.routes as routes
         async def _noop(*args, **kwargs):
             pass
-        monkeypatch.setattr(routes, "_notify_backend", _noop)
+        monkeypatch.setattr(game_flow, "notify_backend", _noop)
         monkeypatch.setattr(routes.flow, "_send_results", _noop)
         monkeypatch.setattr(game_flow, "FEEDBACK_DELAY", 0.1)
 
@@ -252,10 +252,11 @@ class TestSynchronizedRounds:
         assert room["status"] == "finished"
 
     def test_multi_disconnect_does_not_block(self, client, monkeypatch):
+        import src.game_flow as game_flow
         import src.routes as routes
         async def _noop(*args, **kwargs):
             pass
-        monkeypatch.setattr(routes, "_notify_backend", _noop)
+        monkeypatch.setattr(game_flow, "notify_backend", _noop)
         monkeypatch.setattr(routes.flow, "_send_results", _noop)
 
         payload = {
