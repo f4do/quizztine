@@ -86,23 +86,8 @@ export default function FeedbackBanner({
               </span>
             </div>
           )}
-
-          <div className="flex flex-col items-center leading-tight border-l border-white/30 pl-2 sm:pl-4">
-            <span className="font-display text-lg sm:text-xl animate-countdown-pulse">
-              {countdown}
-            </span>
-            <span className="text-[10px] uppercase tracking-wider opacity-90">
-              {t("room.next_short")}
-            </span>
-          </div>
         </div>
       </div>
-
-      <div
-        className="absolute bottom-0 left-0 h-1 bg-white/40 transition-all duration-1000 ease-linear"
-        style={{ width: `${(countdown / 5) * 100}%` }}
-        aria-hidden="true"
-      />
     </div>
   );
 }

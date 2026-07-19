@@ -21,6 +21,8 @@ from src.schemas import (
     CurrentQuestionResponse,
     JoinRequest,
     JoinResponse,
+    ReplayRequest,
+    RoomMode,
     ScoreboardEntry,
 )
 from src.scoring import ScoringContext, is_answer_correct
@@ -105,6 +107,7 @@ async def get_room(room_id: str) -> dict[str, Any]:
         "status": room.status,
         "player_count": room.player_count,
         "current_question_index": room.current_question_index,
+        "total_questions": len(room.shuffled_question_ids),
         "players": [
             {
                 "id": p.player_id,
@@ -162,8 +165,9 @@ async def remove_player(
         del room.players[player_id]
         logger.info("player_removed", extra={"room_id": room_id, "player_id": player_id})
         if room.player_count == 0:
-            store.remove(room_id)
-            logger.info("room_deleted_empty", extra={"room_id": room_id})
+            if not room.creator_player_id or player_id == room.creator_player_id:
+                store.remove(room_id)
+                logger.info("room_deleted_empty", extra={"room_id": room_id})
     else:
         room.players[player_id].disconnected = True
         logger.info("player_disconnected", extra={"room_id": room_id, "player_id": player_id})
@@ -237,6 +241,9 @@ async def start_room(room_id: str, player_id: str = "") -> dict[str, str]:
 
     if room.player_count == 0:
         raise engine_error(400, "NO_PLAYERS", "Cannot start a room with no players")
+
+    if room.mode != RoomMode.solo and room.player_count < 2:
+        raise engine_error(400, "NOT_ENOUGH_PLAYERS", "Multiplayer rooms need at least 2 players")
 
     room.shuffle_questions()
     room.status = GameStatus.playing
@@ -408,6 +415,23 @@ async def submit_answer(
         streak=response_streak,
         cumulative_time=player.cumulative_time + response_time,
     )
+
+
+@router.post("/rooms/{room_id}/replay", status_code=status.HTTP_200_OK)
+async def replay_room(room_id: str, body: ReplayRequest) -> dict[str, str]:
+    try:
+        store.get_or_raise(room_id)
+    except KeyError:
+        raise engine_error(404, "ROOM_NOT_FOUND", f"Room {room_id} not found")
+
+    try:
+        store.replay_room(room_id, new_questions=body.questions)
+    except ValueError as exc:
+        raise engine_error(400, "NOT_FINISHED", str(exc))
+
+    logger.info("room_replayed", extra={"room_id": room_id})
+
+    return {"status": "replayed"}
 
 
 @router.get("/rooms/{room_id}/scoreboard")

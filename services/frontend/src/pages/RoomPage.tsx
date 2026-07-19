@@ -11,6 +11,40 @@ import CircularTimer from "../components/CircularTimer";
 import FeedbackBanner from "../components/FeedbackBanner";
 import Card from "../components/ui/Card";
 
+/** Deterministic seeded PRNG (mulberry32). */
+function mulberry32(seed: number): () => number {
+  return () => {
+    seed |= 0;
+    seed = (seed + 0x6d2b79f5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/** Hash a string into a 32-bit integer. */
+function hashStr(str: string): number {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    const chr = str.charCodeAt(i);
+    hash = ((hash << 5) - hash + chr) | 0;
+  }
+  return hash;
+}
+
+/**
+ * Shuffle an array **in place** using Fisher-Yates with a seeded RNG.
+ * Returns the same array reference.
+ */
+function seededShuffle<T>(arr: T[], seed: number): T[] {
+  const rng = mulberry32(seed);
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
 interface RoomInfo {
   id: string;
   code?: string;
@@ -18,6 +52,7 @@ interface RoomInfo {
   timer: number;
   status: string;
   player_count: number;
+  total_questions: number;
   players: {
     id: string;
     nickname: string;
@@ -58,7 +93,7 @@ interface ScoreboardEntry {
   cumulative_time: number;
 }
 
-type Phase = "pre-game" | "game" | "feedback" | "end";
+type Phase = "pre-game" | "ready" | "game" | "feedback" | "end";
 
 export default function RoomPage() {
   const { t } = useTranslation();
@@ -98,6 +133,7 @@ export default function RoomPage() {
   );
   const [selectedChoices, setSelectedChoices] = useState<number[]>([]);
   const [choiceCorrect, setChoiceCorrect] = useState<boolean[]>([]);
+  const [choiceOrder, setChoiceOrder] = useState<number[]>([]); // displayIdx → dbIdx
   const [timeLeft, setTimeLeft] = useState(0);
 
   const [result, setResult] = useState<AnswerResult | null>(null);
@@ -105,6 +141,9 @@ export default function RoomPage() {
   const [timerExpired, setTimerExpired] = useState(false);
   const [soloStarting, setSoloStarting] = useState(false);
   const [joining, setJoining] = useState(false);
+  const [isReplaying, setIsReplaying] = useState(false);
+  const [readyPlayers, setReadyPlayers] = useState<Set<string>>(new Set());
+  const [isReady, setIsReady] = useState(false);
 
   const [hasAnswered, setHasAnswered] = useState(false);
   const [feedbackCountdown, setFeedbackCountdown] = useState(0);
@@ -239,6 +278,7 @@ export default function RoomPage() {
       const allCorrect = data.results.filter((r) => r.correct);
       const allWrong = data.results.filter((r) => !r.correct);
       if (own) {
+        const playerCount = data.results.length;
         setResult({
           correct: own.correct,
           points: own.points,
@@ -253,7 +293,8 @@ export default function RoomPage() {
             own.correct &&
             allCorrect.length > 0 &&
             allCorrect[0].player_id === playerIdRef.current,
-          onlyWrong: !own.correct && allWrong.length === 1,
+          // "Only wrong" is only meaningful with 3+ players
+          onlyWrong: !own.correct && allWrong.length === 1 && playerCount >= 3,
           difficulty: questionDifficulty,
         });
       }
@@ -272,6 +313,32 @@ export default function RoomPage() {
       clearFeedbackTimer();
       setPhase("end");
       loadScoreboard();
+    });
+
+    socket.on("player-ready", (data: { playerId: string; ready: boolean }) => {
+      setReadyPlayers((prev) => {
+        const next = new Set(prev);
+        if (data.ready) {
+          next.add(data.playerId);
+        } else {
+          next.delete(data.playerId);
+        }
+        return next;
+      });
+    });
+
+    socket.on("room-replayed", () => {
+      clearFeedbackTimer();
+      setPhase("ready");
+      setResult(null);
+      setScoreboard([]);
+      setHasAnswered(false);
+      setTimerExpired(false);
+      setSelectedChoices([]);
+      setReadyPlayers(new Set());
+      setIsReady(false);
+      // Refresh room state from engine
+      api(`/rooms/${roomId}`).then((d) => setRoom(d as RoomInfo));
     });
 
     socket.on("answer-error", (data: { error: string }) => {
@@ -305,6 +372,13 @@ export default function RoomPage() {
           playerId: rc.pid,
           nickname: rc.nickname,
         });
+        // Refresh room state to see ourselves in the player list
+        try {
+          const d = (await api(`/rooms/${roomId}`)) as RoomInfo;
+          setRoom(d);
+        } catch {
+          /* room refresh is best-effort */
+        }
         if (room?.status === "playing") fetchQuestion();
       };
       tryReconnect();
@@ -330,7 +404,7 @@ export default function RoomPage() {
   }, [roomId, clearTimer, clearFeedbackTimer, room?.status]);
 
   useEffect(() => {
-    if (phase !== "game" || hasAnswered) return;
+    if (phase !== "game") return;
     setTimeLeft(room?.timer ?? 30);
     timerRef.current = setInterval(() => {
       setTimeLeft((prev) => {
@@ -342,7 +416,7 @@ export default function RoomPage() {
       });
     }, 1000);
     return clearTimer;
-  }, [phase, room?.timer, clearTimer, hasAnswered]);
+  }, [phase, room?.timer, clearTimer]);
 
   const prevTimeLeft = useRef(0);
   useEffect(() => {
@@ -357,7 +431,7 @@ export default function RoomPage() {
       submitAnswer([]);
     }
     prevTimeLeft.current = timeLeft;
-  }, [timeLeft, phase, questionId, hasAnswered]);
+  }, [timeLeft, phase, questionId]);
 
   // Fallback: si la phase feedback dure plus de 12s sans question suivante,
   // forcer le fetch (au cas où next-question n'arriverait pas)
@@ -382,7 +456,8 @@ export default function RoomPage() {
         if (prev <= 1) {
           clearFeedbackTimer();
           setResult(null);
-          fetchQuestion();
+          // Wait briefly so the ring is seen empty, then advance.
+          setTimeout(() => fetchQuestion(), 200);
           return 0;
         }
         return prev - 1;
@@ -419,14 +494,24 @@ export default function RoomPage() {
           sourceUrl?: string | null;
         };
       };
+      // Shuffle choices deterministically so all players in the same room
+      // see the same order, but different from the stored DB order.
+      const dbChoices = qResp.question.choices;
+      const dbIndices = dbChoices.map((_, i) => i);
+      const seed = hashStr(`${roomId}-${q.question_id}`);
+      seededShuffle(dbIndices, seed);
+      setChoiceOrder(dbIndices); // displayIdx → dbIdx
+      setQuestionChoices(dbIndices.map((i) => dbChoices[i]));
+      setChoiceCorrect(dbIndices.map((i) => dbChoices[i].isCorrect));
       setQuestionText(qResp.question.text);
       setQuestionDifficulty(qResp.question.difficulty);
-      setQuestionChoices(qResp.question.choices);
-      setChoiceCorrect(qResp.question.choices.map((c) => c.isCorrect));
       setQuestionMediaUrl(mediaUrl(qResp.question.mediaUrl) ?? null);
       setQuestionMediaType(qResp.question.mediaType ?? null);
       setQuestionExplanation(qResp.question.explanation ?? null);
       setQuestionSourceUrl(qResp.question.sourceUrl ?? null);
+      // Set the game timer value here (BEFORE setPhase) so the CircularTimer
+      // sees the jump from 0→timer and triggers the fill animation.
+      setTimeLeft(room?.timer ?? 30);
       setPhase("game");
     } catch {
       setPhase("end");
@@ -526,10 +611,57 @@ export default function RoomPage() {
     }
   };
 
+  const handlePlayAgain = async () => {
+    if (isReplaying) return;
+    setIsReplaying(true);
+    try {
+      setError("");
+      await api(`/rooms/${roomId}/replay`, { method: "POST" });
+
+      if (room?.mode === "solo") {
+        // Solo: auto-start immediately
+        clearFeedbackTimer();
+        setResult(null);
+        setScoreboard([]);
+        await api(`/rooms/${roomId}/start?player_id=${playerIdRef.current}`, {
+          method: "POST",
+        });
+        socketRef.current?.emit("game-started", { roomId });
+        await fetchQuestion();
+      }
+      // For multiplayer: the room-replayed socket event handles the phase transition
+      // to "ready" for all players simultaneously
+    } catch (err) {
+      setError(formatError(err, t("room.replay_failed")));
+    } finally {
+      setIsReplaying(false);
+    }
+  };
+
+  const handleToggleReady = () => {
+    const newReady = !isReady;
+    setIsReady(newReady);
+    // Update local readyPlayers so we see our own state immediately
+    setReadyPlayers((prev) => {
+      const next = new Set(prev);
+      if (newReady) {
+        next.add(playerIdRef.current);
+      } else {
+        next.delete(playerIdRef.current);
+      }
+      return next;
+    });
+    socketRef.current?.emit("player-ready", {
+      roomId,
+      playerId: playerIdRef.current,
+      ready: newReady,
+    });
+  };
+
   const submitAnswer = (choices: number[]) => {
     if (!socketRef.current || hasAnswered) return;
     setHasAnswered(true);
-    clearTimer();
+
     setRoom((prev) =>
       prev
         ? {
@@ -540,20 +672,29 @@ export default function RoomPage() {
           }
         : prev,
     );
+    // Map display indices to DB indices so the engine (which validates
+    // against DB-order correct_choices) gets the right values.
+    const dbChoices = choices.map((i) => choiceOrder[i] ?? i);
     socketRef.current.emit("answer", {
       roomId,
       playerId: playerIdRef.current,
       questionId: questionIdRef.current,
-      selectedChoices: choices,
+      selectedChoices: dbChoices,
       clientTimestamp: Date.now(),
     });
   };
 
   const handleChoice = (idx: number) => {
     if (hasAnswered) return;
-    setSelectedChoices((prev) =>
-      prev.includes(idx) ? prev.filter((i) => i !== idx) : [...prev, idx],
-    );
+    setSelectedChoices((prev) => {
+      const toggle = (xs: number[]) =>
+        xs.includes(idx) ? xs.filter((i) => i !== idx) : [...xs, idx];
+      // Radio behaviour for single-correct questions: swap selection.
+      if (choiceCorrect.filter(Boolean).length <= 1) {
+        return prev.includes(idx) ? [] : [idx];
+      }
+      return toggle(prev);
+    });
   };
 
   const handleAnswerSubmit = () => {
@@ -613,7 +754,8 @@ export default function RoomPage() {
     if (phase === "end") {
       const own = scoreboard.find((s) => s.player_id === playerIdRef.current);
       if (!own) return t("christine.end.default");
-      if (scoreboard.length > 0 && scoreboard.every((s) => s.score === 0))
+      // Only show the 0-points easter egg in multiplayer (2+ players)
+      if (room?.mode !== "solo" && scoreboard.length > 0 && scoreboard.every((s) => s.score === 0))
         return t("room.easter_egg");
       if (scoreboard[0]?.player_id === playerIdRef.current)
         return t("christine.end.winner", { score: own.score });
@@ -728,9 +870,22 @@ export default function RoomPage() {
                 <p className="text-gray-600 dark:text-gray-400 mb-2 font-medium">
                   {t("room.share")}
                 </p>
-                <code className="block bg-rose-50 dark:bg-gray-900 px-4 py-2 rounded-xl border border-rose-200 dark:border-gray-700 text-tv-red dark:text-tv-gold break-all text-xs font-mono">
-                  {window.location.href}
-                </code>
+                <div className="flex items-stretch gap-2">
+                  <code className="flex-1 bg-rose-50 dark:bg-gray-900 px-3 py-2 rounded-xl border border-rose-200 dark:border-gray-700 text-tv-red dark:text-tv-gold break-all text-xs font-mono select-all flex items-center">
+                    {`${window.location.origin}/?code=${room?.code ?? ""}`}
+                  </code>
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(
+                        `${window.location.origin}/?code=${room?.code ?? ""}`
+                      )
+                    }}
+                    className="px-3 py-2 rounded-xl bg-tv-gold/20 hover:bg-tv-gold/30 text-tv-purple dark:text-tv-gold font-bold text-xs uppercase tracking-wider transition-colors border border-tv-gold/30 shrink-0 cursor-pointer"
+                    title={t("room.copy_link")}
+                  >
+                    {t("room.copy_link")}
+                  </button>
+                </div>
               </Card>
             )}
 
@@ -797,13 +952,19 @@ export default function RoomPage() {
                   {t("room.joined_as")} <strong>{nickname}</strong>
                 </div>
                 {playerId === creatorPid ? (
-                  <div>
+                  <div className="space-y-3">
                     <button
                       onClick={handleStart}
-                      className="buzzer-btn px-10 py-4 rounded-2xl bg-gradient-to-r from-tv-red to-tv-purple text-white font-bold text-lg uppercase tracking-wider shadow-lg hover:shadow-xl transition-all cursor-pointer"
+                      disabled={room.mode !== "solo" && room.player_count < 2}
+                      className="buzzer-btn px-10 py-4 rounded-2xl bg-gradient-to-r from-tv-red to-tv-purple text-white font-bold text-lg uppercase tracking-wider shadow-lg hover:shadow-xl transition-all disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
                     >
                       {t("room.start")}
                     </button>
+                    {room.mode !== "solo" && room.player_count < 2 && (
+                      <p className="text-sm text-amber-600 dark:text-amber-400 font-medium animate-fade-in">
+                        {t("room.waiting_for_players")}
+                      </p>
+                    )}
                   </div>
                 ) : (
                   <p className="text-sm text-gray-500 dark:text-gray-400 font-medium">
@@ -816,7 +977,7 @@ export default function RoomPage() {
         )}
 
         {(phase === "game" || isFeedback) && (
-          <div key={questionId} className="space-y-6 mt-2 animate-question-in">
+          <>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <span className="px-3 py-1 rounded-full bg-tv-purple text-white text-xs font-bold uppercase tracking-wider">
@@ -833,23 +994,26 @@ export default function RoomPage() {
                   </span>
                 )}
               </div>
-              {!isFeedback ? (
+              <div className="flex flex-col items-center gap-0">
                 <CircularTimer
-                  timeLeft={timeLeft}
-                  total={room?.timer ?? 30}
-                  warningThreshold={10}
-                  dangerThreshold={5}
-                  stopped={hasAnswered}
+                  timeLeft={isFeedback ? feedbackCountdown : timeLeft}
+                  total={isFeedback ? 5 : (room?.timer ?? 30)}
+                  size={52}
+                  strokeWidth={5}
+                  warningThreshold={isFeedback ? 3 : 10}
+                  dangerThreshold={isFeedback ? 1 : 5}
                 />
-              ) : (
-                <span className="px-3 py-1 rounded-full bg-tv-gold text-tv-purple text-xs font-bold uppercase tracking-wider animate-countdown-pulse">
-                  {feedbackCountdown > 0
-                    ? t("room.next_question_in", { seconds: feedbackCountdown })
-                    : t("room.auto_next")}
+                <span className="w-[52px] inline-block text-center text-[9px] font-bold uppercase tracking-widest leading-tight text-gray-500 dark:text-gray-400">
+                  {isFeedback
+                    ? (questionIndex + 1 >= (room?.total_questions ?? Infinity)
+                        ? t("room.timer_results")
+                        : t("room.timer_next"))
+                    : t("room.timer_answer")}
                 </span>
-              )}
+              </div>
             </div>
 
+            <div key={questionId} className="space-y-6 mt-2 animate-question-in">
             <Card className="rounded-3xl p-6 sm:p-8 tv-stage-light min-h-[420px]">
               {isFeedback && result && (
                 <FeedbackBanner
@@ -895,12 +1059,13 @@ export default function RoomPage() {
                   />
                 )}
 
-                {questionId > 0 && (
+                  {questionId > 0 && (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     {questionChoices.map((choice, idx) => {
                       const isSelected = selectedChoices.includes(idx);
                       const isCorrect = choiceCorrect[idx];
                       const inFeedback = isFeedback;
+                      const isMulti = choiceCorrect.filter(Boolean).length > 1;
                       const containerClasses = inFeedback
                         ? getChoiceStyle(idx, selectedChoices, choiceCorrect)
                         : isSelected
@@ -935,7 +1100,7 @@ export default function RoomPage() {
                           className={`buzzer-btn answer-choice text-left px-4 py-4 rounded-xl border-2 text-sm font-bold transition-all ${containerClasses} ${hasAnswered || inFeedback ? "opacity-90 cursor-not-allowed" : "cursor-pointer hover:scale-[1.01] active:scale-[0.99]"}`}
                         >
                           <span
-                            className={`inline-flex items-center justify-center w-8 h-8 rounded-full border-2 text-sm font-bold mr-3 transition-colors duration-300 ${iconClasses}`}
+                            className={`inline-flex items-center justify-center w-8 h-8 ${isMulti ? "rounded-md" : "rounded-full"} border-2 text-sm font-bold mr-3 transition-colors duration-300 ${iconClasses}`}
                           >
                             {iconContent}
                           </span>
@@ -980,6 +1145,7 @@ export default function RoomPage() {
             )}
 
           </div>
+          </>
         )}
 
         {phase === "end" && (
@@ -1047,15 +1213,101 @@ export default function RoomPage() {
               )}
 
             <div className="flex gap-3 justify-center">
-              <button
-                onClick={() => navigate(`/room/create`)}
-                className="buzzer-btn px-8 py-3 rounded-2xl bg-gradient-to-r from-tv-red to-tv-red-dark text-white font-bold uppercase tracking-wider hover:shadow-lg cursor-pointer"
-              >
-                {t("room.play_again")}
-              </button>
+              {(room?.mode === "solo" || creatorPid === playerIdRef.current) && (
+                <button
+                  onClick={handlePlayAgain}
+                  disabled={isReplaying}
+                  className="buzzer-btn px-8 py-3 rounded-2xl bg-gradient-to-r from-tv-red to-tv-red-dark text-white font-bold uppercase tracking-wider hover:shadow-lg disabled:opacity-50 cursor-pointer"
+                >
+                  {isReplaying ? t("common.loading") : t("room.play_again")}
+                </button>
+              )}
               <button
                 onClick={() => navigate("/")}
                 className="buzzer-btn px-8 py-3 rounded-2xl bg-tv-gold text-tv-purple font-bold uppercase tracking-wider hover:bg-tv-gold-dark cursor-pointer"
+              >
+                {t("room.home")}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {phase === "ready" && (
+          <div className="space-y-6 mt-4 text-center animate-fade-in-up">
+            <div className="inline-block">
+              <h2 className="font-display text-4xl sm:text-5xl text-tv-red dark:text-tv-gold uppercase tracking-wide mb-2">
+                {t("room.ready.title")}
+              </h2>
+              <div className="h-1 w-full bg-gradient-to-r from-tv-gold via-tv-red to-tv-purple rounded-full" />
+            </div>
+
+            <div className="tv-card rounded-3xl border-2 border-tv-gold/50 shadow-2xl overflow-hidden max-w-md mx-auto">
+              <div className="divide-y divide-rose-100 dark:divide-gray-800">
+                {room?.players.map((p) => (
+                  <div
+                    key={p.id}
+                    className="flex items-center justify-between px-6 py-4"
+                  >
+                    <span className="font-bold text-gray-900 dark:text-gray-100">
+                      {p.nickname}
+                    </span>
+                    <span className="text-sm font-bold">
+                      {readyPlayers.has(p.id) ? (
+                        <span className="text-emerald-600 dark:text-emerald-400">
+                          {t("room.ready.ready")}
+                        </span>
+                      ) : (
+                        <span className="text-gray-400">
+                          {t("room.ready.not_ready")}
+                        </span>
+                      )}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex gap-3 justify-center">
+              {creatorPid === playerIdRef.current ? (
+                <>
+                  <button
+                    onClick={handleToggleReady}
+                    className={`buzzer-btn px-6 py-3 rounded-2xl font-bold uppercase tracking-wider cursor-pointer transition-all ${
+                      isReady
+                        ? "bg-emerald-600 text-white"
+                        : "bg-tv-gold text-tv-purple"
+                    }`}
+                  >
+                    {isReady ? t("room.ready.not_ready_btn") : t("room.ready.ready_btn")}
+                  </button>
+                  <button
+                    onClick={handleStart}
+                    disabled={readyPlayers.size !== room?.players.length}
+                    className="buzzer-btn px-8 py-3 rounded-2xl bg-gradient-to-r from-tv-red to-tv-red-dark text-white font-bold uppercase tracking-wider hover:shadow-lg disabled:opacity-50 cursor-pointer"
+                  >
+                    {readyPlayers.size === room?.players.length
+                      ? t("room.start")
+                      : t("room.ready.waiting", {
+                          count: readyPlayers.size,
+                          total: room?.players.length ?? 0,
+                        })}
+                  </button>
+                </>
+              ) : (
+                <button
+                  onClick={handleToggleReady}
+                  className={`buzzer-btn px-8 py-3 rounded-2xl font-bold uppercase tracking-wider cursor-pointer transition-all ${
+                    isReady
+                      ? "bg-emerald-600 text-white"
+                      : "bg-tv-gold text-tv-purple"
+                  }`}
+                >
+                  {isReady ? t("room.ready.not_ready_btn") : t("room.ready.ready_btn")}
+                </button>
+              )}
+              <button
+                onClick={() => navigate("/")}
+                className="buzzer-btn px-8 py-3 rounded-2xl bg-gray-500 text-white font-bold uppercase tracking-wider hover:bg-gray-600 cursor-pointer"
               >
                 {t("room.home")}
               </button>

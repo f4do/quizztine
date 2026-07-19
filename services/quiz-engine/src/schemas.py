@@ -97,6 +97,10 @@ class PlayerAnswer(BaseModel):
     time_spent: float
 
 
+class ReplayRequest(BaseModel):
+    questions: list[QuestionPayload] | None = None
+
+
 class GameStatus(BaseModel):
     status: Literal["waiting", "playing", "finished"]
     players: int

@@ -174,6 +174,52 @@ class RoomStore:
         with self._lock:
             room.answers.append(record)
 
+    def replay_room(
+        self,
+        room_id: str,
+        new_questions: list[QuestionPayload] | None = None,
+    ) -> Room:
+        """Reset a finished room to waiting state so it can be replayed.
+        If new_questions is provided, replace the question pool.
+        """
+        room = self.get_or_raise(room_id)
+        if room.status != GameStatus.finished:
+            raise ValueError(f"Room {room_id} is not finished (status={room.status})")
+
+        with self._lock:
+            if new_questions is not None:
+                room.questions = [
+                    QuestionState(
+                        id=q.id,
+                        correct_choices=q.correct_choices,
+                        difficulty=q.difficulty,
+                        question_type=q.question_type,
+                    )
+                    for q in new_questions
+                ]
+            room.status = GameStatus.waiting
+            room.answers.clear()
+            room.shuffled_question_ids.clear()
+            room.start_time = 0.0
+            room.current_question_index = 0
+            room.question_started_at = 0.0
+            room.question_deadline = 0.0
+            room.answered_players.clear()
+            room.current_round_answers.clear()
+            room.feedback_until = None
+            room.advance_task = None
+
+            for player in room.players.values():
+                player.score = 0
+                player.streak = 0
+                player.cumulative_time = 0.0
+                player.current_question_index = 0
+                player.finished = False
+                player.question_started_at = 0.0
+                player.disconnected = False
+
+        return room
+
     def remove(self, room_id: str) -> None:
         with self._lock:
             self._rooms.pop(room_id, None)

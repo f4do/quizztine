@@ -87,15 +87,16 @@ model QuestionReport {
 }
 
 model Room {
-  id          String      @id @default(uuid())
-  code        String      @unique
-  mode        String      // "solo" | "multi_private" | "multi_public"
-  timer       Int         @default(30)
-  creatorId   String?
-  creator     User?       @relation(fields: [creatorId], references: [id])
-  createdAt   DateTime    @default(now())
-  status      String      @default("waiting") // "waiting" | "playing" | "finished"
-  gameResult  GameResult?
+  id            String      @id @default(uuid())
+  code          String      @unique
+  mode          String      // "solo" | "multi_private" | "multi_public"
+  timer         Int         @default(30)
+  questionCount Int         @default(10)
+  creatorId     String?
+  creator       User?       @relation(fields: [creatorId], references: [id])
+  createdAt     DateTime    @default(now())
+  status        String      @default("waiting") // "waiting" | "playing" | "finished"
+  gameResult    GameResult?
 }
 
 model GameResult {

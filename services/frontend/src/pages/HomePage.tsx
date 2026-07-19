@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { api } from "../lib/api";
 import Layout from "../components/Layout";
@@ -10,6 +10,15 @@ export default function HomePage() {
   const [code, setCode] = useState("");
   const [joinError, setJoinError] = useState("");
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+
+  // Auto-fill code from URL ?code= parameter
+  useEffect(() => {
+    const urlCode = searchParams.get("code");
+    if (urlCode) {
+      setCode(urlCode.toUpperCase());
+    }
+  }, [searchParams]);
 
   const handleJoin = async (e: React.FormEvent) => {
     e.preventDefault();

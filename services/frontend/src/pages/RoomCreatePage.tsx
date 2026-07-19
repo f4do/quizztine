@@ -7,15 +7,16 @@ import Layout from "../components/Layout";
 import { ChristinePresenter } from "../components/christine";
 import Card from "../components/ui/Card";
 
-const difficultyOptions: Record<string, "EASY" | "MEDIUM" | "HARD"> = {
-  easy: "EASY",
-  medium: "MEDIUM",
-  hard: "HARD",
-};
-
 type Mode = "solo" | "multi_private" | "multi_public";
 
 const COUNT_OPTIONS = [10, 20, 50];
+
+type GameMode = "classic";
+const GAME_MODES: { value: GameMode; key: string; descKey: string; available: boolean }[] = [
+  { value: "classic", key: "classic", descKey: "classic_desc", available: true },
+  { value: "speed", key: "speed", descKey: "speed_desc", available: false },
+  { value: "elimination", key: "elimination", descKey: "elimination_desc", available: false },
+];
 
 export default function RoomCreatePage() {
   const { t } = useTranslation();
@@ -23,11 +24,12 @@ export default function RoomCreatePage() {
   const navigate = useNavigate();
 
   const [mode, setMode] = useState<Mode>("solo");
+  const [gameMode, setGameMode] = useState<GameMode>("classic");
   const [questionCount, setQuestionCount] = useState(10);
   const [customCount, setCustomCount] = useState("");
   const [availableCategories, setAvailableCategories] = useState<string[]>([]);
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
-  const [difficulty, setDifficulty] = useState("");
+  const [difficulties, setDifficulties] = useState<string[]>([]);
   const [timer, setTimer] = useState(30);
   const [includePrivate, setIncludePrivate] = useState(false);
   const [error, setError] = useState("");
@@ -36,14 +38,25 @@ export default function RoomCreatePage() {
   const isQuizmaster =
     user?.role === "QUIZMASTER" || user?.role === "QUIZADMIN";
 
-  const MODES: { value: Mode; label: string; icon: string }[] = [
+  const toggleDifficulty = (d: string) => {
+    setDifficulties((prev) =>
+      prev.includes(d) ? prev.filter((x) => x !== d) : [...prev, d],
+    );
+  };
+
+  const MODES: { value: Mode; label: string; icon: string; disabled?: boolean }[] = [
     { value: "solo", label: t("room_create.solo"), icon: "🎓" },
     {
       value: "multi_private",
       label: t("room_create.multi_private"),
       icon: "🔒",
     },
-    { value: "multi_public", label: t("room_create.multi_public"), icon: "🌐" },
+    {
+      value: "multi_public",
+      label: t("room_create.multi_public_soon"),
+      icon: "🌐",
+      disabled: true,
+    },
   ];
 
   useEffect(() => {
@@ -78,7 +91,7 @@ export default function RoomCreatePage() {
         timer,
       };
       if (selectedCategories.length > 0) body.categories = selectedCategories;
-      if (difficulty) body.difficulty = difficultyOptions[difficulty];
+      if (difficulties.length > 0) body.difficulties = difficulties;
       if (isQuizmaster && includePrivate) body.includePrivate = true;
 
       const d = (await api("/rooms", {
@@ -103,25 +116,6 @@ export default function RoomCreatePage() {
       setLoading(false);
     }
   };
-
-  const difficultyColors = ["", "EASY", "MEDIUM", "HARD"].map((d) => {
-    const isSelected = difficulty === d;
-    if (d === "")
-      return isSelected
-        ? "bg-tv-purple text-white border-tv-purple"
-        : "bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-700";
-    if (d === "EASY")
-      return isSelected
-        ? "bg-emerald-500 text-white border-emerald-500"
-        : "bg-white dark:bg-gray-800 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800";
-    if (d === "MEDIUM")
-      return isSelected
-        ? "bg-amber-500 text-white border-amber-500"
-        : "bg-white dark:bg-gray-800 text-amber-600 dark:text-amber-400 border-amber-200 dark:border-amber-800";
-    return isSelected
-      ? "bg-tv-red text-white border-tv-red"
-      : "bg-white dark:bg-gray-800 text-tv-red dark:text-red-400 border-rose-200 dark:border-rose-800";
-  });
 
   return (
     <Layout>
@@ -152,11 +146,15 @@ export default function RoomCreatePage() {
                   <button
                     key={m.value}
                     type="button"
-                    onClick={() => setMode(m.value)}
-                    className={`flex flex-col items-center gap-1 px-2 py-3 rounded-xl text-sm font-bold border-2 transition-all cursor-pointer ${
-                      mode === m.value
+                    disabled={m.disabled}
+                    onClick={() => !m.disabled && setMode(m.value)}
+                    title={m.disabled ? t("room_create.coming_soon") : undefined}
+                    className={`flex flex-col items-center gap-1 px-2 py-3 rounded-xl text-sm font-bold border-2 transition-all ${
+                      mode === m.value && !m.disabled
                         ? "bg-tv-red text-white border-tv-red shadow-md"
-                        : "bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-700 hover:border-rose-300 dark:hover:border-rose-800"
+                        : m.disabled
+                          ? "bg-gray-100 dark:bg-gray-800/50 text-gray-400 dark:text-gray-600 border-gray-200 dark:border-gray-700 cursor-not-allowed opacity-60"
+                          : "bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-700 hover:border-rose-300 dark:hover:border-rose-800 cursor-pointer"
                     }`}
                   >
                     <span className="text-xl">{m.icon}</span>
@@ -169,6 +167,32 @@ export default function RoomCreatePage() {
                   {t("room_create.auth_required")}
                 </p>
               )}
+            </div>
+
+            <div>
+              <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-3">
+                {t("room_create.game_mode")}
+              </label>
+              <div className="flex gap-2 flex-wrap">
+                {GAME_MODES.map((gm) => (
+                  <button
+                    key={gm.value}
+                    type="button"
+                    disabled={!gm.available}
+                    title={gm.available ? t(`room_create.${gm.descKey}`) : `${t(`room_create.${gm.descKey}`)} — ${t("room_create.coming_soon")}`}
+                    onClick={() => gm.available && setGameMode(gm.value)}
+                    className={`px-4 py-2 rounded-xl text-sm font-bold border-2 transition-all ${
+                      gm.available && gameMode === gm.value
+                        ? "bg-tv-red text-white border-tv-red shadow-md"
+                        : gm.available
+                          ? "bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-700 hover:border-rose-300 dark:hover:border-rose-800 cursor-pointer"
+                          : "bg-gray-100 dark:bg-gray-800/50 text-gray-400 dark:text-gray-600 border-gray-200 dark:border-gray-700 cursor-not-allowed opacity-60"
+                    }`}
+                  >
+                    {t(`room_create.${gm.key}`)}
+                  </button>
+                ))}
+              </div>
             </div>
 
             <div>
@@ -243,18 +267,42 @@ export default function RoomCreatePage() {
                 {t("room_create.difficulty")}
               </label>
               <div className="flex gap-2 flex-wrap">
-                {["", "EASY", "MEDIUM", "HARD"].map((d, i) => (
-                  <button
-                    key={d}
-                    type="button"
-                    onClick={() => setDifficulty(d)}
-                    className={`px-4 py-2 rounded-xl text-sm font-bold border-2 transition-all cursor-pointer ${difficultyColors[i]}`}
-                  >
-                    {d
-                      ? t(`room_create.${d.toLowerCase()}`)
-                      : t("room_create.any")}
-                  </button>
-                ))}
+                <button
+                  type="button"
+                  onClick={() => setDifficulties([])}
+                  className={`px-4 py-2 rounded-xl text-sm font-bold border-2 transition-all cursor-pointer ${
+                    difficulties.length === 0
+                      ? "bg-tv-purple text-white border-tv-purple"
+                      : "bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-700 hover:border-tv-purple"
+                  }`}
+                >
+                  {t("room_create.any")}
+                </button>
+                {["EASY", "MEDIUM", "HARD"].map((d) => {
+                  const sel = difficulties.includes(d);
+                  const color =
+                    d === "EASY"
+                      ? sel
+                        ? "bg-emerald-500 text-white border-emerald-500"
+                        : "bg-white dark:bg-gray-800 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800 hover:border-emerald-500"
+                      : d === "MEDIUM"
+                        ? sel
+                          ? "bg-amber-500 text-white border-amber-500"
+                          : "bg-white dark:bg-gray-800 text-amber-600 dark:text-amber-400 border-amber-200 dark:border-amber-800 hover:border-amber-500"
+                        : sel
+                          ? "bg-tv-red text-white border-tv-red"
+                          : "bg-white dark:bg-gray-800 text-tv-red dark:text-red-400 border-rose-200 dark:border-rose-800 hover:border-tv-red";
+                  return (
+                    <button
+                      key={d}
+                      type="button"
+                      onClick={() => toggleDifficulty(d)}
+                      className={`px-4 py-2 rounded-xl text-sm font-bold border-2 transition-all cursor-pointer ${color}`}
+                    >
+                      {t(`room_create.${d.toLowerCase()}`)}
+                    </button>
+                  );
+                })}
               </div>
             </div>
 

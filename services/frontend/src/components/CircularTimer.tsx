@@ -20,55 +20,60 @@ export default function CircularTimer({
   stopped = false,
 }: CircularTimerProps) {
   const radius = (size - strokeWidth) / 2;
-  const circumference = 2 * Math.PI * radius;
+  const c = 2 * Math.PI * radius;
 
   const ringRef = useRef<SVGCircleElement>(null);
-  const prevTimeLeftRef = useRef(timeLeft);
+  const updateRef = useRef({ val: timeLeft, at: performance.now() });
+
+  useEffect(() => {
+    updateRef.current = { val: timeLeft, at: performance.now() };
+  });
 
   useEffect(() => {
     const ring = ringRef.current;
     if (!ring) return;
+    let id: number;
 
-    const targetOffset =
-      circumference * (1 - (total > 0 ? timeLeft / total : 0));
-    const from = prevTimeLeftRef.current;
-    prevTimeLeftRef.current = timeLeft;
-
-    if (stopped || from === timeLeft) {
-      ring.style.strokeDashoffset = `${targetOffset}`;
+    if (stopped) {
+      // Freeze animation at current position
+      const fraction = total > 0 ? timeLeft / Math.max(total, 1) : 0;
+      const visible = fraction * c;
+      ring.setAttribute("stroke-dasharray", `${visible} ${c}`);
+      ring.setAttribute("stroke-dashoffset", "0");
       return;
     }
 
-    const fromOffset = circumference * (1 - (total > 0 ? from / total : 0));
-    const startTime = performance.now();
-    let rafId: number;
+    const tick = (now: number) => {
+      const { val, at } = updateRef.current;
+      const cur = Math.max(0, val - (now - at) / 1000);
+      const fraction = total > 0 ? cur / Math.max(total, 1) : 0;
+      const visible = fraction * c;
 
-    const animate = (now: number) => {
-      const elapsed = now - startTime;
-      const progress = Math.min(elapsed / 1000, 1);
-      const currentOffset = fromOffset + (targetOffset - fromOffset) * progress;
       if (ringRef.current) {
-        ringRef.current.style.strokeDashoffset = `${currentOffset}`;
+        ringRef.current.setAttribute("stroke-dasharray", `${visible} ${c}`);
+        ringRef.current.setAttribute("stroke-dashoffset", "0");
       }
-      if (progress < 1) {
-        rafId = requestAnimationFrame(animate);
-      }
+
+      id = requestAnimationFrame(tick);
     };
 
-    rafId = requestAnimationFrame(animate);
-    return () => cancelAnimationFrame(rafId);
-  }, [timeLeft, total, circumference, stopped]);
+    id = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(id);
+  }, [total, c, stopped, timeLeft]);
 
-  let colorClass = "text-emerald-500";
-  if (timeLeft <= dangerThreshold) colorClass = "text-red-500";
-  else if (timeLeft <= warningThreshold) colorClass = "text-amber-500";
+  const color =
+    timeLeft <= dangerThreshold
+      ? "text-red-500"
+      : timeLeft <= warningThreshold
+        ? "text-amber-500"
+        : "text-emerald-500";
 
   return (
     <div
       className="relative inline-flex items-center justify-center"
       style={{ width: size, height: size }}
     >
-      <svg className="transform -rotate-90 w-full h-full">
+      <svg className="w-full h-full" style={{ transform: "rotate(-90deg)" }}>
         <circle
           cx={size / 2}
           cy={size / 2}
@@ -86,33 +91,23 @@ export default function CircularTimer({
           stroke="currentColor"
           strokeWidth={strokeWidth}
           fill="transparent"
-          strokeDasharray={circumference}
-          strokeDashoffset={
-            circumference * (1 - (total > 0 ? timeLeft / total : 0))
-          }
           strokeLinecap="round"
-          className={`${colorClass} ${stopped ? "opacity-60" : ""}`}
+          className={color}
         />
       </svg>
       <span
         className={`absolute text-lg font-bold tabular-nums ${
-          timeLeft <= dangerThreshold
-            ? "text-red-500 animate-countdown-pulse"
-            : timeLeft <= warningThreshold
-              ? "text-amber-500"
-              : "text-gray-700 dark:text-gray-200"
+          stopped
+            ? "text-emerald-500"
+            : timeLeft <= dangerThreshold
+              ? "text-red-500 animate-countdown-pulse"
+              : timeLeft <= warningThreshold
+                ? "text-amber-500"
+                : "text-gray-700 dark:text-gray-200"
         }`}
       >
         {stopped ? (
-          <svg
-            className={`w-6 h-6 ${colorClass}`}
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="3"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
+          <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round">
             <polyline points="20 6 9 17 4 12" />
           </svg>
         ) : (

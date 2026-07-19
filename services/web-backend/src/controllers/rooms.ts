@@ -10,11 +10,11 @@ function generateRoomCode(): string {
 }
 
 export async function createRoom(req: AuthenticatedRequest, res: Response) {
-  const { mode, questionCount, categories, difficulty, timer, includePrivate } = req.body as {
+  const { mode, questionCount, categories, difficulties, timer, includePrivate } = req.body as {
     mode?: string
     questionCount?: number
     categories?: string[]
-    difficulty?: string
+    difficulties?: string | string[]
     timer?: number
     includePrivate?: boolean
   }
@@ -41,12 +41,15 @@ export async function createRoom(req: AuthenticatedRequest, res: Response) {
   if (categories && categories.length > 0) {
     where.category = { in: categories }
   }
-  if (difficulty) {
-    where.difficulty = difficulty
+  if (difficulties && Array.isArray(difficulties) && difficulties.length > 0) {
+    where.difficulty = { in: difficulties }
+  } else if (difficulties && typeof difficulties === 'string') {
+    where.difficulty = difficulties
   }
 
   const availableQuestions = await prisma.question.findMany({ where })
   const count = questionCount ?? 10
+  const usedCount = Math.min(count, Math.max(availableQuestions.length, 1))
 
   // Pseudo-random selection: always shuffle, even when using all
   const shuffled = [...availableQuestions].sort(() => Math.random() - 0.5)
@@ -70,6 +73,7 @@ export async function createRoom(req: AuthenticatedRequest, res: Response) {
       code,
       mode,
       timer: timer ?? 30,
+      questionCount: usedCount,
       creatorId: req.user?.id ?? null,
     },
   })
@@ -155,4 +159,52 @@ export async function getScoreboard(req: AuthenticatedRequest, res: Response) {
   const roomId = req.params.id as string
   const data = await engineClient.getScoreboard(roomId)
   res.json(data)
+}
+
+export async function replayRoom(req: AuthenticatedRequest, res: Response) {
+  const roomId = req.params.id as string
+
+  // Fetch the DB room to get original params
+  const dbRoom = await prisma.room.findUnique({ where: { id: roomId } })
+  if (!dbRoom) {
+    res.status(404).json({ error: 'Room not found', code: 'ROOM_NOT_FOUND', status: 404 })
+    return
+  }
+
+  // Fetch new random questions from DB
+  const where: Record<string, unknown> = { visibility: 'PUBLIC' }
+  const availableQuestions = await prisma.question.findMany({ where })
+  const count = dbRoom.questionCount
+  const shuffled = [...availableQuestions].sort(() => Math.random() - 0.5)
+  const selectedQuestions = shuffled.length > count ? shuffled.slice(0, count) : shuffled
+
+  if (selectedQuestions.length === 0) {
+    res.status(400).json({ error: 'No questions available', code: 'NO_QUESTIONS', status: 400 })
+    return
+  }
+
+  // Build engine payload
+  const newQuestions = selectedQuestions.map((q) => {
+    const choices = q.choices as Array<{ text: string; isCorrect: boolean }>
+    return {
+      id: q.id,
+      correctChoices: choices
+        .map((c, i) => (c.isCorrect ? i : -1))
+        .filter((i) => i !== -1),
+      difficulty: q.difficulty.toLowerCase(),
+    }
+  })
+
+  // Call engine to replace questions and reset the room
+  await engineClient.replayRoom(roomId, newQuestions)
+
+  // Broadcast to all players so they return to pre-game
+  try {
+    const { getIO } = await import('../lib/socket.js')
+    const io = getIO()
+    io.to(`room:${roomId}`).emit('room-replayed', {})
+  } catch {
+    // Socket.IO may not be initialized; event is best-effort
+  }
+  res.json({ status: 'replayed' })
 }

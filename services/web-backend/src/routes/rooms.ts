@@ -1,6 +1,6 @@
 import { Router, type Router as RouterType } from 'express'
 import { optionalAuth } from '../middleware/auth.js'
-import { createRoom, getRoomByCode, getRoomState, joinRoom, startGame, getCurrentQuestion, getScoreboard } from '../controllers/rooms.js'
+import { createRoom, getRoomByCode, getRoomState, joinRoom, startGame, getCurrentQuestion, getScoreboard, replayRoom } from '../controllers/rooms.js'
 import { receiveResults, getResults } from '../controllers/results.js'
 import { questionFinished, nextQuestion, gameFinished } from '../controllers/room-events.js'
 
@@ -19,5 +19,6 @@ router.post('/rooms/:id/join', joinRoom)
 router.post('/rooms/:id/start', startGame)
 router.get('/rooms/:id/current-question/:playerId', getCurrentQuestion)
 router.get('/rooms/:id/scoreboard', getScoreboard)
+router.post('/rooms/:id/replay', replayRoom)
 
 export default router

@@ -148,6 +148,28 @@ class EngineClient {
     }
   }
 
+  async replayRoom(roomId: string, questions?: QuestionPayload[]): Promise<void> {
+    const body: Record<string, unknown> = {}
+    if (questions) {
+      body.questions = questions.map((q) => ({
+        id: q.id,
+        correct_choices: q.correctChoices,
+        difficulty: q.difficulty,
+      }))
+    }
+    const resp = await fetch(`${this.baseUrl}/rooms/${roomId}/replay`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(5000),
+    })
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({ error: 'Engine error' }))
+      const message = err.detail?.error ?? err.error ?? 'Quiz-engine unavailable'
+      throw new AppError(503, 'ENGINE_ERROR', message)
+    }
+  }
+
   async getScoreboard(roomId: string): Promise<ScoreboardEntry[]> {
     const resp = await fetch(`${this.baseUrl}/rooms/${roomId}/scoreboard`, {
       signal: AbortSignal.timeout(5000),

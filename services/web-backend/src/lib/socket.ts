@@ -49,6 +49,13 @@ export function initSocket(httpServer: HTTPServer) {
       engineClient.removePlayer(data.roomId, data.playerId).catch(() => {})
     })
 
+    socket.on('player-ready', (data: { roomId: string; playerId: string; ready: boolean }) => {
+      socket.to(`room:${data.roomId}`).emit('player-ready', {
+        playerId: data.playerId,
+        ready: data.ready,
+      })
+    })
+
     socket.on('game-started', (data: { roomId: string }) => {
       socket.to(`room:${data.roomId}`).emit('game-started')
     })

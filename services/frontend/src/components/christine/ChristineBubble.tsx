@@ -51,13 +51,7 @@ export default function ChristineBubble({
         <span className="text-xs font-bold tracking-wider uppercase text-tv-red dark:text-tv-gold">
           {name}
         </span>
-        <svg
-          className="w-3 h-3 text-tv-red dark:text-tv-gold"
-          viewBox="0 0 24 24"
-          fill="currentColor"
-        >
-          <path d="M12 2C10.34 2 9 3.34 9 5v10c0 1.66 1.34 3 3 3s3-1.34 3-3V5c0-1.66-1.34-3-3-3zm-1 17.93a7 7 0 0014 0v-1h-14v1zm2-1.5h6v-1h-6v1z" />
-        </svg>
+
       </div>
       <p className="text-sm leading-relaxed font-medium">{display}</p>
       {typing && display.length < text.length && (
