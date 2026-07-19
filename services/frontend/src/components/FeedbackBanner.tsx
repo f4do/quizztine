@@ -1,4 +1,5 @@
 import { useTranslation } from "react-i18next";
+import { usePhrases } from "../lib/PhrasesProvider";
 
 export interface FeedbackBannerProps {
   correct: boolean;
@@ -23,6 +24,7 @@ export default function FeedbackBanner({
   className = "",
 }: FeedbackBannerProps) {
   const { t } = useTranslation();
+  const { getPhrase } = usePhrases();
 
   const isCorrect = correct;
   const containerClass = isCorrect
@@ -47,12 +49,12 @@ export default function FeedbackBanner({
             <p className="text-xs font-semibold opacity-90">
               {isCorrect
                 ? onlyCorrect
-                  ? t("host.feedback.only_correct")
+                  ? getPhrase("feedback.only_correct")
                   : firstCorrect
-                    ? t("host.feedback.first_correct")
+                    ? getPhrase("feedback.first_correct")
                     : `${t("room.points")}${points}`
                 : onlyWrong
-                  ? t("host.feedback.only_wrong")
+                  ? getPhrase("feedback.only_wrong")
                   : `${t("room.points")}${points}`}
             </p>
           </div>

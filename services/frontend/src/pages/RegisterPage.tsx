@@ -5,9 +5,11 @@ import { useAuth } from "../lib/auth";
 import Layout from "../components/Layout";
 import { AppHostPresenter } from "../components/host";
 import Card from "../components/ui/Card";
+import { usePhrases } from "../lib/PhrasesProvider";
 
 export default function RegisterPage() {
   const { t } = useTranslation();
+  const { getPhrase } = usePhrases();
   const [pseudo, setPseudo] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -44,7 +46,7 @@ export default function RegisterPage() {
               {t("register.title")}
             </h1>
             <p className="text-sm text-gray-500 dark:text-gray-400">
-              {t("host.register.prompt")}
+              {t("register.subtitle")}
             </p>
           </div>
 
@@ -124,7 +126,7 @@ export default function RegisterPage() {
       </div>
 
       <AppHostPresenter
-        message={t("host.register.welcome")}
+        message={getPhrase("register.welcome")}
         expression="smile"
         position="bottom-right"
         avatarSize="md"

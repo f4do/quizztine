@@ -6,9 +6,11 @@ import { useAuth } from "../lib/auth";
 import Card from "../components/ui/Card";
 import Button from "../components/ui/Button";
 import { AppHostPresenter } from "../components/host";
+import { usePhrases } from "../lib/PhrasesProvider";
 
 export default function AdminDashboardPage() {
   const { t } = useTranslation();
+  const { getPhrase } = usePhrases();
   const { user } = useAuth();
   const isQuizadmin = user?.role === "QUIZADMIN";
   const [counts, setCounts] = useState({
@@ -110,7 +112,7 @@ export default function AdminDashboardPage() {
       </div>
 
       <AppHostPresenter
-        message={t("host.admin.dashboard")}
+        message={getPhrase("admin.dashboard")}
         expression="smile"
         position="bottom-right"
         avatarSize="sm"

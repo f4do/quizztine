@@ -51,6 +51,9 @@ export interface UseRoomGameReturn {
   hasAnswered: boolean;
   feedbackCountdown: number;
   feedbackMeta: FeedbackMeta;
+  perfectScore: boolean;
+  timerWarning: boolean;
+  correctCount: number;
   hostMessage: string;
   hostExpression: HostExpression;
   answeredCount: number;
@@ -130,6 +133,9 @@ export function useRoomGame(roomId: string): UseRoomGameReturn {
     difficulty: null,
   });
 
+  const [correctCount, setCorrectCount] = useState(0);
+  const [timerWarning, setTimerWarning] = useState(false);
+
   /* ── refs ───────────────────────────────────────────────────────── */
   const socketRef = useRef<Socket | null>(null);
   const questionIdRef = useRef(0);
@@ -138,6 +144,10 @@ export function useRoomGame(roomId: string): UseRoomGameReturn {
   phaseRef.current = phase;
   const choiceOrderRef = useRef<number[]>([]);
   const reconnectRef = useRef<{ pid: string; nickname: string } | null>(null);
+  const roomRef = useRef(room);
+  roomRef.current = room;
+  const timeLeftRef = useRef(timeLeft);
+  timeLeftRef.current = timeLeft;
 
   /* ── custom questionId setter (keeps ref in sync) ──────────────── */
   const setQuestionId = (n: number) => {
@@ -247,6 +257,7 @@ export function useRoomGame(roomId: string): UseRoomGameReturn {
       setQuestionIndex(q.index);
       setSelectedChoices([]);
       setHasAnswered(false);
+      setTimerWarning(false);
       setRoom((prev) =>
         prev
           ? {
@@ -373,6 +384,8 @@ export function useRoomGame(roomId: string): UseRoomGameReturn {
     });
 
     socket.on("game-started", () => {
+      setCorrectCount(0);
+      setTimerWarning(false);
       fetchQuestionRef.current();
     });
 
@@ -402,6 +415,9 @@ export function useRoomGame(roomId: string): UseRoomGameReturn {
           streak: own.streak,
           cumulative_time: own.cumulative_time,
         });
+        if (own.correct) {
+          setCorrectCount((prev) => prev + 1);
+        }
         setFeedbackMeta({
           correct: own.correct,
           onlyCorrect: own.correct && allCorrect.length === 1,
@@ -411,6 +427,13 @@ export function useRoomGame(roomId: string): UseRoomGameReturn {
             allCorrect[0].player_id === playerIdRef.current,
           onlyWrong: !own.correct && allWrong.length === 1 && playerCount >= 3,
           difficulty: questionDifficulty,
+          streak: own.streak,
+          totalQuestions: roomRef.current?.total_questions,
+          earnedPoints: own.points,
+          score: roomRef.current?.players.find(p => p.id === playerIdRef.current)?.score ?? 0,
+          correctCount: correctCount + (own.correct ? 1 : 0),
+          category: "",
+          pseudo: nickname,
         });
       }
       setPhase("feedback");
@@ -452,6 +475,8 @@ export function useRoomGame(roomId: string): UseRoomGameReturn {
       setScoreboard([]);
       setHasAnswered(false);
       setSelectedChoices([]);
+      setCorrectCount(0);
+      setTimerWarning(false);
       setReadyPlayers(new Set());
       setIsReady(false);
       // Refresh room state from engine
@@ -672,6 +697,9 @@ export function useRoomGame(roomId: string): UseRoomGameReturn {
 
   const handleAnswerSubmit = useCallback(() => {
     submitAnswer(selectedChoices);
+    if (timeLeftRef.current <= 5 && timeLeftRef.current > 0) {
+      setTimerWarning(true);
+    }
     if (room?.mode === "solo") {
       setPhase("feedback");
       clearTimer();
@@ -695,6 +723,10 @@ export function useRoomGame(roomId: string): UseRoomGameReturn {
   const totalActive =
     room?.players.filter((p) => !p.disconnected).length ?? 0;
   const isFeedback = phase === "feedback";
+  const perfectScore =
+    correctCount > 0 &&
+    correctCount >= (room?.total_questions ?? 0) &&
+    (room?.total_questions ?? 0) > 0;
 
   /* ── host hook ─────────────────────────────────────────────────── */
   const { hostMessage, hostExpression } = useHostMessages({
@@ -702,10 +734,14 @@ export function useRoomGame(roomId: string): UseRoomGameReturn {
     roomMode: room?.mode,
     questionIndex,
     questionDifficulty,
+    questionMediaType,
     feedbackMeta,
     timerExpired,
+    timerWarning,
     scoreboard,
     playerId,
+    playerPseudo: nickname,
+    perfectScore,
   });
 
   /* ── return ────────────────────────────────────────────────────── */
@@ -741,6 +777,9 @@ export function useRoomGame(roomId: string): UseRoomGameReturn {
     hasAnswered,
     feedbackCountdown,
     feedbackMeta,
+    perfectScore,
+    timerWarning,
+    correctCount,
     hostMessage,
     hostExpression,
     answeredCount,

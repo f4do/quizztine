@@ -6,6 +6,7 @@ import { useAuth } from "../lib/auth";
 import Layout from "../components/Layout";
 import { AppHostPresenter } from "../components/host";
 import Card from "../components/ui/Card";
+import { usePhrases } from "../lib/PhrasesProvider";
 
 type Mode = "solo" | "multi_private" | "multi_public";
 
@@ -35,6 +36,7 @@ const GAME_MODES: {
 
 export default function RoomCreatePage() {
   const { t } = useTranslation();
+  const { getPhrase } = usePhrases();
   const { user } = useAuth();
   const navigate = useNavigate();
 
@@ -145,7 +147,7 @@ export default function RoomCreatePage() {
             {t("room_create.title")}
           </h1>
           <p className="text-sm text-gray-500 dark:text-gray-400">
-            {t("host.room_create.prompt")}
+            {t("room_create.subtitle")}
           </p>
         </div>
 
@@ -376,7 +378,7 @@ export default function RoomCreatePage() {
       </div>
 
       <AppHostPresenter
-        message={t("host.room_create.welcome")}
+        message={getPhrase("room_create.welcome")}
         expression="focused"
         position="bottom-right"
         avatarSize="md"

@@ -4,9 +4,11 @@ import { useTranslation } from "react-i18next";
 import { api } from "../lib/api";
 import Layout from "../components/Layout";
 import { AppHostPresenter } from "../components/host";
+import { usePhrases } from "../lib/PhrasesProvider";
 
 export default function HomePage() {
   const { t } = useTranslation();
+  const { getPhrase } = usePhrases();
   const [code, setCode] = useState("");
   const [joinError, setJoinError] = useState("");
   const navigate = useNavigate();
@@ -100,7 +102,7 @@ export default function HomePage() {
       </div>
 
       <AppHostPresenter
-        message={t("host.home.welcome")}
+        message={getPhrase("home.welcome")}
         expression="smile"
         position="bottom-right"
         avatarSize="lg"

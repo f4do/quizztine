@@ -6,9 +6,11 @@ import { api } from "../lib/api";
 import Layout from "../components/Layout";
 import { AppHostPresenter } from "../components/host";
 import Card from "../components/ui/Card";
+import { usePhrases } from "../lib/PhrasesProvider";
 
 export default function TrainPage() {
   const { t } = useTranslation();
+  const { getPhrase } = usePhrases();
   const { user } = useAuth();
   const navigate = useNavigate();
   const [categories, setCategories] = useState<string[]>([]);
@@ -145,7 +147,7 @@ export default function TrainPage() {
       </div>
 
       <AppHostPresenter
-        message={t("host.train.prompt")}
+        message={getPhrase("train.prompt")}
         expression="focused"
         position="bottom-right"
         avatarSize="md"

@@ -5,9 +5,11 @@ import { useAuth } from "../lib/auth";
 import Layout from "../components/Layout";
 import { AppHostPresenter } from "../components/host";
 import Card from "../components/ui/Card";
+import { usePhrases } from "../lib/PhrasesProvider";
 
 export default function LoginPage() {
   const { t } = useTranslation();
+  const { getPhrase } = usePhrases();
   const [loginInput, setLoginInput] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -34,7 +36,7 @@ export default function LoginPage() {
               {t("login.title")}
             </h1>
             <p className="text-sm text-gray-500 dark:text-gray-400">
-              {t("host.login.prompt")}
+              {t("login.subtitle")}
             </p>
           </div>
 
@@ -88,7 +90,7 @@ export default function LoginPage() {
       </div>
 
       <AppHostPresenter
-        message={t("host.login.welcome")}
+        message={getPhrase("login.welcome")}
         expression="focused"
         position="bottom-right"
         avatarSize="md"

@@ -8,6 +8,7 @@ import LanguageSwitcher from "../components/LanguageSwitcher";
 import ThemeSwitcher from "../components/ThemeSwitcher";
 import { AppHostPresenter } from "../components/host";
 import Card from "../components/ui/Card";
+import { usePhrases } from "../lib/PhrasesProvider";
 
 interface ProfileData {
   id: string;
@@ -32,6 +33,7 @@ interface StatData {
 
 export default function ProfilePage() {
   const { t, i18n } = useTranslation();
+  const { getPhrase } = usePhrases();
   const { user, refreshUser, logout } = useAuth();
   const navigate = useNavigate();
 
@@ -447,7 +449,7 @@ export default function ProfilePage() {
       </div>
 
       <AppHostPresenter
-        message={t("host.profile.prompt", { pseudo: user?.pseudo || "" })}
+        message={getPhrase("profile.prompt", { pseudo: user?.pseudo || "" })}
         expression="smile"
         position="bottom-right"
         avatarSize="md"

@@ -90,4 +90,18 @@ export interface FeedbackMeta {
   firstCorrect: boolean;
   onlyWrong: boolean;
   difficulty: string | null;
+  streak?: number;
+  totalQuestions?: number;
+  /** Player's earned points on this question */
+  earnedPoints?: number;
+  /** Player's cumulative score */
+  score?: number;
+  /** Player's running correct count */
+  correctCount?: number;
+  /** Player's rank (1-based) */
+  rank?: number;
+  /** Question category name */
+  category?: string;
+  /** Player pseudo */
+  pseudo?: string;
 }

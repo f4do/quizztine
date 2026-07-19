@@ -18,6 +18,7 @@
   "home.code_invalid": "Code invalide : salon introuvable",
 
   "login.title": "Connexion",
+  "login.subtitle": "Entrez vos identifiants pour rejoindre le plateau.",
   "login.email_or_pseudo": "Email ou pseudo",
   "login.email": "Email",
   "login.password": "Mot de passe",
@@ -26,6 +27,7 @@
   "login.register": "Inscription",
 
   "register.title": "Inscription",
+  "register.subtitle": "Remplissez le formulaire pour devenir un champion de Quizztine.",
   "register.pseudo": "Pseudo",
   "register.email": "Email",
   "register.password": "Mot de passe (12 caractères minimum)",
@@ -37,6 +39,7 @@
   "register.login": "Connexion",
 
   "room_create.title": "Créer un salon",
+  "room_create.subtitle": "Configurez votre partie comme un vrai jeu télévisé.",
   "room_create.mode": "Mode",
   "room_create.solo": "Solo",
   "room_create.multi_private": "Multijoueur Privé",
@@ -240,6 +243,32 @@
   "admin.hosts.fetching": "Récupération…",
   "admin.hosts.fetch_failed": "Échec de la récupération de l'avatar.",
   "admin.hosts.current_avatar": "Avatar actuel",
+  "admin.hosts.hosts_tab": "Présentateurs",
+  "admin.hosts.phrases_tab": "Phrases",
+  "admin.hosts.phrases_title": "Gestion des phrases",
+  "admin.hosts.phrases_add": "Ajouter une phrase",
+  "admin.hosts.phrases_edit": "Modifier la phrase",
+  "admin.hosts.phrases_context": "Contexte",
+  "admin.hosts.phrases_lang": "Langue",
+  "admin.hosts.phrases_text": "Texte",
+  "admin.hosts.phrases_priority": "Priorité",
+  "admin.hosts.phrases_scope": "Scope",
+
+  "admin.hosts.phrases_no_phrases": "Aucune phrase personnalisée. Les phrases par défaut (i18n) seront utilisées.",
+  "admin.hosts.phrases_saved": "Phrase enregistrée",
+  "admin.hosts.phrases_deleted": "Phrase supprimée",
+  "admin.hosts.phrases_confirm_delete": "Supprimer cette phrase ?",
+  "admin.hosts.phrases_context_filter": "Filtrer par contexte",
+  "admin.hosts.phrases_lang_filter": "Langue",
+  "admin.hosts.phrases_variables_hint": "Variables disponibles : {{vars}}",
+  "admin.hosts.phrases_empty_text": "Texte requis",
+  "admin.hosts.phrases_fr": "Français",
+  "admin.hosts.phrases_en": "English",
+  "admin.hosts.phrases_page": "Page",
+  "admin.hosts.phrases_all_contexts": "Tous les contextes",
+  "admin.hosts.phrases_all_languages": "Toutes les langues",
+  "admin.hosts.phrases_all_scopes": "Tous",
+  "admin.hosts.phrases_reset_filters": "Réinitialiser",
 
   "profile.title": "Mon profil",
   "profile.info.title": "Informations du compte",
@@ -286,16 +315,19 @@
   "host.home.new_candidate": "Ah, un nouveau candidat ! Installez-vous, ça va être passionnant !",
 
   "host.login.welcome": "Contente de vous revoir ! Connectez-vous pour jouer.",
-  "host.login.prompt": "Entrez vos identifiants pour rejoindre le plateau.",
 
   "host.register.welcome": "Ah, un nouveau candidat ! Créez votre compte et entrez dans le jeu.",
-  "host.register.prompt": "Remplissez le formulaire pour devenir un champion de Quizztine.",
 
   "host.room_create.welcome": "Vous allez créer votre propre salon. Choisissez bien vos options !",
-  "host.room_create.prompt": "Configurez votre partie comme un vrai jeu télévisé.",
 
   "host.pre.welcome": "Bienvenue sur le plateau ! En attendant les autres candidats, installez-vous confortablement.",
   "host.pre.solo": "Prêt pour votre session solo ? C'est parti !",
+  "host.ready.replay": "Prêt pour une nouvelle partie ? Cette fois-ci, je veux voir du spectacle !",
+
+  "host.game.first": "La partie commence ! Que le meilleur gagne !",
+  "host.game.last": "Dernière question ! Tout se joue maintenant...",
+  "host.game.media_audio": "Écoutez bien, voici un indice sonore !",
+  "host.game.media_video": "Regardez attentivement, une image vidéo pour vous aider...",
 
   "host.question.default": "Voici la question numéro {{index}}. Alors, quelle est votre réponse ?",
   "host.question.easy": "Question {{index}}. Facile ? On va voir ça...",
@@ -308,13 +340,23 @@
   "host.feedback.wrong": "Ooh, dommage ! La bonne réponse était...",
   "host.feedback.only_wrong": "Vous étiez le seul à vous tromper... Ça arrive !",
   "host.feedback.timeout": "Temps écoulé ! La bonne réponse était...",
+  "host.feedback.correct_first_only": "Non seulement c'est juste, mais en plus vous êtes le premier à répondre !",
+  "host.feedback.streak_3": "{{streak}} bonnes réponses d'affilée ! Vous assurez !",
+  "host.feedback.streak_5": "{{streak}} ! C'est une véritable série ! Continuez comme ça !",
+  "host.feedback.streak_10": "{{streak}} bonnes réponses à la suite ! Vous êtes un phénomène !",
+  "host.feedback.last_second": "Renvoyée au dernier moment ! Quel sang-froid !",
+  "host.feedback.streak_lost": "Et voilà, la série s'arrête là. Pas grave, on recommence !",
 
   "host.explanation.default": "La réponse était {{answer}}. Voici pourquoi : {{explanation}}",
 
   "host.end.winner": "Quel parcours ! Vous terminez avec {{score}} points !",
+  "host.end.second": "Deuxième place avec {{score}} points ! Vous étiez si proche !",
+  "host.end.third": "Troisième place avec {{score}} points ! Une belle performance !",
+  "host.end.last": "{{pseudo}}, vous terminez dernier avec {{score}} points. Mais vous avez du cran d'être allé jusqu'au bout !",
   "host.end.low": "Ce n'était pas votre jour, mais l'important c'est de participer !",
   "host.end.perfect": "UN SANS-FAUTE ! Vous êtes un génie !",
   "host.end.default": "Partie terminée ! Vous terminez avec {{score}} points. Bravo !",
+  "host.end.tie": "Ex-aequo ! {{pseudo}}, vous êtes à égalité ! Le suspense reste entier !",
 
   "host.train.prompt": "Entraînez-vous sur vos thèmes faibles et devenez imbattable !",
 
@@ -323,5 +365,42 @@
   "host.admin.dashboard": "Bienvenue dans les coulisses ! Gérez les questions, les utilisateurs et les catégories.",
   "host.admin.question_form": "Créez une belle question pour défier nos candidats.",
 
-  "host.error.message": "Oups, un petit problème technique. Revenons à l'accueil ?"
+  "host.error.message": "Oups, un petit problème technique. Revenons à l'accueil ?",
+  "host.site.after_register": "Bienvenue parmi nous {{pseudo}} ! Votre aventure commence maintenant.",
+  "host.site.after_login": "Bon retour parmi nous {{pseudo}} ! Le plateau vous attend.",
+  "host.site.after_logout": "À bientôt ! Revenez quand vous voulez défier vos amis.",
+  "host.site.after_password_change": "Mot de passe modifié avec succès ! Votre compte est à jour.",
+  "host.site.after_account_delete": "Votre compte a été supprimé. C'est triste de vous voir partir... Revenez quand vous voulez !",
+  "host.site.room_created": "Votre salon est prêt ! Le code c'est {{code}} — partagez-le pour que vos amis rejoignent.",
+  "host.site.admin_questions": "{{count}} questions enregistrées. Vous avez du pain sur la planche !",
+  "host.site.admin_users": "Voici la liste des utilisateurs. Gérez leurs rôles ici.",
+  "host.site.admin_categories": "Gérez les catégories de questions. Customisez le quiz à votre image.",
+
+  "ready.replay": "On remet ça ? Préparez-vous pour une nouvelle manche !",
+  "game.first": "Première question ! On commence en beauté !",
+  "game.last": "Dernière question ! Tout se joue maintenant !",
+  "game.media_audio": "Question musicale ! Tendez bien l'oreille...",
+  "game.media_video": "Regardez bien l'écran ! Tout est dans la vidéo...",
+
+  "feedback.streak_10": "DIX BONNES RÉPONSES D'AFFILÉE ! C'est du jamais vu !",
+  "feedback.streak_5": "Cinq sur cinq ! Vous êtes en feu aujourd'hui !",
+  "feedback.streak_3": "Trois d'affilée ! La machine est lancée !",
+  "feedback.correct_first_only": "Non seulement vous êtes le premier, mais vous êtes le seul ! Minute de silence...",
+  "feedback.last_second": "Renvoyée in extremis ! Vous avez du cran !",
+  "feedback.streak_lost": "Et voilà, la série s'arrête là... Mais vous reviendrez plus fort !",
+
+  "end.second": "Vous décrochez la deuxième place avec {{score}} points ! Une médaille d'argent !",
+  "end.third": "Troisième ! {{score}} points et une médaille de bronze pour vous !",
+  "end.last": "La dernière place aujourd'hui... Mais vous avez participé, et ça compte !",
+  "end.tie": "Ex-aequo ! Vous terminez avec le même score ! L'honneur est sauf.",
+
+  "site.after_register": "Bienvenue parmi nous {{pseudo}} ! Le plateau n'attend que vous.",
+  "site.after_login": "Content de vous revoir {{pseudo}} ! Une nouvelle partie vous attend.",
+  "site.after_logout": "À bientôt sur le plateau de Quizztine !",
+  "site.after_password_change": "Mot de passe mis à jour. Votre compte est en sécurité.",
+  "site.after_account_delete": "C'est triste de vous voir partir... La porte vous sera toujours ouverte.",
+  "site.room_created": "Salon créé ! Le code {{code}} — partagez-le à vos adversaires.",
+  "site.admin_questions": "{{count}} questions en base. Laquelle voulez-vous passer en revue ?",
+  "site.admin_users": "Voici vos candidats inscrits. Un nouveau champion parmi eux ?",
+  "site.admin_categories": "Les catégories sont vos thèmes. Ajoutez, renommez, organisez."
 }

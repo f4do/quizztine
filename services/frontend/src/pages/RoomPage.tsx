@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import Layout from "../components/Layout";
 import { AppHostPresenter } from "../components/host";
 import Card from "../components/ui/Card";
+import { usePhrases } from "../lib/PhrasesProvider";
 import { useRoomGame } from "../lib/useRoomGame";
 import RoomPreGame from "../components/room/RoomPreGame";
 import RoomGame from "../components/room/RoomGame";
@@ -11,6 +12,7 @@ import RoomReady from "../components/room/RoomReady";
 
 export default function RoomPage() {
   const { t } = useTranslation();
+  const { getPhrase } = usePhrases();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const roomId = id!;
@@ -34,7 +36,7 @@ export default function RoomPage() {
           </Card>
         </div>
         <AppHostPresenter
-          message={t("host.error.message")}
+          message={getPhrase("error.message")}
           expression="console"
           variant="error"
           position="bottom-right"
