@@ -28,7 +28,6 @@ services:
       JWT_SECRET: dev-secret-change-in-production
       CORS_ORIGIN: http://localhost:5173
       UPLOAD_DIR: /app/uploads
-      QUIZ_ENGINE_URL: http://quiz-engine:8000
     volumes:
       - ./services/web-backend/src:/app/src
       - ./services/web-backend/prisma:/app/prisma
@@ -42,7 +41,6 @@ services:
       - "5173:5173"
     environment:
       VITE_API_URL: http://localhost:3000
-      VITE_ENGINE_URL: http://localhost:8001
       VITE_DEFAULT_LANG: fr
     volumes:
       - ./services/frontend/public:/app/public
@@ -51,22 +49,6 @@ services:
       - ./services/frontend/vite.config.ts:/app/vite.config.ts
       - ./services/frontend/tsconfig.json:/app/tsconfig.json
       - ./services/frontend/tsconfig.app.json:/app/tsconfig.app.json
-
-  quiz-engine:
-    build:
-      context: ./services/quiz-engine
-      dockerfile: Dockerfile.dev
-    ports:
-      - "8001:8000"
-    environment:
-      QUIZ_ENGINE_HOST: 0.0.0.0
-      QUIZ_ENGINE_PORT: 8000
-      BACKEND_URL: http://web-backend:3000
-      LOG_LEVEL: INFO
-    volumes:
-      - ./services/quiz-engine/src:/app/src
-      - ./services/quiz-engine/tests:/app/tests
-    restart: unless-stopped
 
 volumes:
   pgdata:

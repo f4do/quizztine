@@ -29,7 +29,6 @@ services:
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
       CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:5173}
       UPLOAD_DIR: /app/uploads
-      QUIZ_ENGINE_URL: http://quiz-engine:8000
     volumes:
       - uploads:/app/uploads
     restart: unless-stopped
@@ -58,25 +57,6 @@ services:
       interval: 10s
       timeout: 5s
       retries: 3
-
-  quiz-engine:
-    build:
-      context: ./services/quiz-engine
-      dockerfile: Dockerfile
-    ports:
-      - "${ENGINE_PORT:-8001}:8000"
-    environment:
-      QUIZ_ENGINE_HOST: 0.0.0.0
-      QUIZ_ENGINE_PORT: 8000
-      BACKEND_URL: http://web-backend:3000
-      LOG_LEVEL: ${LOG_LEVEL:-INFO}
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 3
-      start_period: 10s
 
 volumes:
   pgdata:
