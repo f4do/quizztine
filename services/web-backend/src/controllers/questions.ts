@@ -68,8 +68,9 @@ export async function getQuestion(req: AuthenticatedRequest, res: Response) {
   // If ?game=true, strip isCorrect from choices (gameplay mode)
   if (req.query.game === 'true') {
     const choices = question.choices as Array<{ text: string; isCorrect: boolean }>
+    const correctCount = choices.filter(c => c.isCorrect).length
     const sanitizedChoices = choices.map(({ isCorrect: _, ...rest }) => rest)
-    res.json({ question: { ...question, choices: sanitizedChoices } })
+    res.json({ question: { ...question, choices: sanitizedChoices }, correctCount })
     return
   }
 
