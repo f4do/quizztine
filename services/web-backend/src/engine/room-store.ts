@@ -40,6 +40,7 @@ export class RoomStore {
       answeredPlayers: new Set(),
       currentRoundAnswers: new Map(),
       feedbackUntil: null,
+      questionStartedAt: null,
       deadlineTimer: null,
       advanceTimer: null,
       totalQuestions: params.questions.length,

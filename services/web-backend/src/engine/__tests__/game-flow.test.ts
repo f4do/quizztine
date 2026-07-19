@@ -65,6 +65,8 @@ function setupSolo(overrides?: Partial<CreateRoomParams>): string {
   store.create(params)
   store.addPlayer(id, 'p1', 'Alice')
   flow.startGame(id, null)
+  // Advance fake timers so questionStartedAt → Date.now() gives a non-zero elapsed
+  vi.advanceTimersByTime(1000)
   return id
 }
 
@@ -753,17 +755,23 @@ describe('ScoreboardTiebreaker', () => {
     const id = await setupMulti({ id: 'tiebreaker', questions: [q(1, [0], 'easy')] })
 
     // Both answer correctly: same score
+    // p2 answers faster (0.5s) than p1 (2.0s) using server-side elapsed
     const q1 = await gameEngine.getCurrentQuestion(id, 'p1')
     const q2 = await gameEngine.getCurrentQuestion(id, 'p2')
-    await gameEngine.submitAnswer(id, 'p1', {
-      question_id: q1.question_id,
-      selected_choices: [0],
-      client_timestamp: ts() - 2000, // 2 secs elapsed
-    })
+
+    // p2 answers quickly — advance to 0.5s
+    vi.advanceTimersByTime(500)
     await gameEngine.submitAnswer(id, 'p2', {
       question_id: q2.question_id,
       selected_choices: [0],
-      client_timestamp: ts() - 500,  // 0.5 secs elapsed
+      client_timestamp: 0,
+    })
+    // p1 answers later — advance to 2.0s
+    vi.advanceTimersByTime(1500)
+    await gameEngine.submitAnswer(id, 'p1', {
+      question_id: q1.question_id,
+      selected_choices: [0],
+      client_timestamp: 0,
     })
     await vi.advanceTimersByTimeAsync(FEEDBACK_DELAY_MS + 200)
 

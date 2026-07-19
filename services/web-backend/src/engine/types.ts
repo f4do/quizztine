@@ -66,6 +66,7 @@ export interface Room {
   answeredPlayers: Set<string>
   currentRoundAnswers: Map<string, RoundAnswer>
   feedbackUntil: number | null
+  questionStartedAt: number | null  // Date.now() when current question was shown
 
   // Timers
   deadlineTimer: ReturnType<typeof setTimeout> | null

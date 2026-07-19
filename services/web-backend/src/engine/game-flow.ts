@@ -92,6 +92,7 @@ export abstract class GameFlow {
     room.answeredPlayers.clear()
     room.currentRoundAnswers.clear()
     room.feedbackUntil = null
+    room.questionStartedAt = Date.now()
 
     this.scheduleDeadline(roomId)
   }
@@ -188,6 +189,7 @@ export abstract class GameFlow {
     }
 
     // Start the next round
+    room.questionStartedAt = Date.now()
     this.scheduleDeadline(roomId)
 
     await notifyBackend(roomId, 'next-question', {

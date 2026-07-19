@@ -276,17 +276,11 @@ export const gameEngine = {
       throw new AppError(400, 'ALREADY_ANSWERED', 'Player already answered this round')
     }
 
-    // Compute elapsed based on when the question started
-    // The server calculates elapsed using its own clock.
-    // We use the time the player took based on timer comparison.
-    // In the Python version, `elapsed = time.time() - room.question_started_at`
-    // but we don't store question_started_at in TS Room. Instead we approximate:
-    // elapsed = min(room.timer, time since start)
-    // Since we don't have question_started_at in TS, we can estimate remaining
-    // from the deadline timer, or simply use client_timestamp as a heuristic.
-    // For simplicity, use client_timestamp difference:
-    const clientElapsed = (Date.now() - data.client_timestamp) / 1000
-    const elapsed = Math.min(clientElapsed, room.timer)
+    // Compute elapsed based on server clock since question started
+    // This avoids clock-skew errors from relying on client_timestamp.
+    const elapsed = room.questionStartedAt
+      ? Math.min((Date.now() - room.questionStartedAt) / 1000, room.timer)
+      : room.timer
     const timeout = elapsed >= room.timer
 
     // Register the answer
