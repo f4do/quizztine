@@ -11,7 +11,7 @@ type Mode = "solo" | "multi_private" | "multi_public";
 
 const COUNT_OPTIONS = [10, 20, 50];
 
-type GameMode = "classic";
+type GameMode = "classic" | "speed" | "elimination";
 const GAME_MODES: { value: GameMode; key: string; descKey: string; available: boolean }[] = [
   { value: "classic", key: "classic", descKey: "classic_desc", available: true },
   { value: "speed", key: "speed", descKey: "speed_desc", available: false },
