@@ -87,6 +87,8 @@ export default function RoomPage() {
             questionMediaType={game.questionMediaType}
             questionExplanation={game.questionExplanation}
             questionSourceUrl={game.questionSourceUrl}
+            questionDifficulty={game.questionDifficulty}
+            questionCorrectCount={game.questionCorrectCount}
             selectedChoices={game.selectedChoices}
             choiceCorrect={game.choiceCorrect}
             hasAnswered={game.hasAnswered}

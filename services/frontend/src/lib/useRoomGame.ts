@@ -36,6 +36,7 @@ export interface UseRoomGameReturn {
   questionMediaType: string | null;
   questionExplanation: string | null;
   questionSourceUrl: string | null;
+  questionCorrectCount: number;
   selectedChoices: number[];
   choiceCorrect: boolean[];
   timeLeft: number;
@@ -109,6 +110,7 @@ export function useRoomGame(roomId: string): UseRoomGameReturn {
   const [selectedChoices, setSelectedChoices] = useState<number[]>([]);
   const [choiceCorrect, setChoiceCorrect] = useState<boolean[]>([]);
   const [choiceOrder, setChoiceOrder] = useState<number[]>([]);
+  const [questionCorrectCount, setQuestionCorrectCount] = useState(1);
 
   const [result, setResult] = useState<AnswerResult | null>(null);
   const [scoreboard, setScoreboard] = useState<ScoreboardEntry[]>([]);
@@ -265,6 +267,7 @@ export function useRoomGame(roomId: string): UseRoomGameReturn {
           explanation?: string | null;
           sourceUrl?: string | null;
         };
+        correctCount?: number;
       };
       // Deterministic shuffle so all players see the same order
       const dbChoices = qResp.question.choices;
@@ -275,6 +278,8 @@ export function useRoomGame(roomId: string): UseRoomGameReturn {
       choiceOrderRef.current = dbIndices;
       setQuestionChoices(dbIndices.map((i) => dbChoices[i]));
       setChoiceCorrect(new Array(dbChoices.length).fill(false));
+      // correctCount tells us if checkboxes (multi) or radio (single) must be shown
+      setQuestionCorrectCount(qResp.correctCount ?? 1);
       setQuestionText(qResp.question.text);
       setQuestionDifficulty(qResp.question.difficulty);
       setQuestionMediaUrl(mediaUrl(qResp.question.mediaUrl) ?? null);
@@ -657,13 +662,13 @@ export function useRoomGame(roomId: string): UseRoomGameReturn {
     setSelectedChoices((prev) => {
       const toggle = (xs: number[]) =>
         xs.includes(idx) ? xs.filter((i) => i !== idx) : [...xs, idx];
-      if (choiceCorrect.filter(Boolean).length <= 1) {
+      if (questionCorrectCount <= 1) {
         return prev.includes(idx) ? [] : [idx];
       }
       return toggle(prev);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hasAnswered, choiceCorrect]);
+  }, [hasAnswered, questionCorrectCount]);
 
   const handleAnswerSubmit = useCallback(() => {
     submitAnswer(selectedChoices);
@@ -721,6 +726,7 @@ export function useRoomGame(roomId: string): UseRoomGameReturn {
     questionMediaType,
     questionExplanation,
     questionSourceUrl,
+    questionCorrectCount,
     selectedChoices,
     choiceCorrect,
     timeLeft,

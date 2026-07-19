@@ -19,6 +19,8 @@ interface RoomGameProps {
   questionMediaType: string | null;
   questionExplanation: string | null;
   questionSourceUrl: string | null;
+  questionDifficulty: string | null;
+  questionCorrectCount: number;
   selectedChoices: number[];
   choiceCorrect: boolean[];
   hasAnswered: boolean;
@@ -50,6 +52,8 @@ export default function RoomGame({
   questionMediaType,
   questionExplanation,
   questionSourceUrl,
+  questionDifficulty,
+  questionCorrectCount,
   selectedChoices,
   choiceCorrect,
   hasAnswered,
@@ -68,6 +72,33 @@ export default function RoomGame({
 }: RoomGameProps) {
   const { t } = useTranslation();
 
+  const difficultyLabel =
+    questionDifficulty === "EASY"
+      ? t("room.difficulty_easy")
+      : questionDifficulty === "MEDIUM"
+        ? t("room.difficulty_medium")
+        : questionDifficulty === "HARD"
+          ? t("room.difficulty_hard")
+          : null;
+
+  const pointsValue =
+    questionDifficulty === "EASY"
+      ? 10
+      : questionDifficulty === "MEDIUM"
+        ? 15
+        : questionDifficulty === "HARD"
+          ? 20
+          : null;
+
+  const difficultyColor =
+    questionDifficulty === "EASY"
+      ? "bg-emerald-600 text-white dark:bg-emerald-500 dark:text-white"
+      : questionDifficulty === "MEDIUM"
+        ? "bg-amber-600 text-white dark:bg-amber-500 dark:text-white"
+        : questionDifficulty === "HARD"
+          ? "bg-rose-600 text-white dark:bg-rose-500 dark:text-white"
+          : "bg-gray-500 text-white";
+
   return (
     <>
       <div className="flex items-center justify-between">
@@ -75,6 +106,16 @@ export default function RoomGame({
           <span className="px-3 py-1 rounded-full bg-tv-purple text-white text-xs font-bold uppercase tracking-wider">
             {t("room.question")} {questionIndex + 1}
           </span>
+          {questionDifficulty && difficultyLabel && (
+            <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${difficultyColor}`}>
+              {difficultyLabel}
+            </span>
+          )}
+          {questionDifficulty && pointsValue !== null && (
+            <span className="px-3 py-1 rounded-full bg-tv-purple text-white text-xs font-bold uppercase tracking-wider shadow-sm">
+              {pointsValue} {t("room.points_short")}
+            </span>
+          )}
           {roomMode !== "solo" && !isFeedback && (
             <span className="text-sm text-gray-500 dark:text-gray-400 font-medium">
               {hasAnswered
@@ -157,7 +198,7 @@ export default function RoomGame({
                   const isSelected = selectedChoices.includes(idx);
                   const isCorrect = choiceCorrect[idx];
                   const inFeedback = isFeedback;
-                  const isMulti = choiceCorrect.filter(Boolean).length > 1;
+                  const isMulti = questionCorrectCount > 1;
                   const containerClasses = inFeedback
                     ? getChoiceStyle(idx, selectedChoices, choiceCorrect)
                     : isSelected
