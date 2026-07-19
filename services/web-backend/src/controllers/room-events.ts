@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { getIO } from '../lib/socket.js'
 import type { Request, Response } from 'express'
+import type { QuestionFinishedPayload } from '../engine/types.js'
 
 const playerResultSchema = z.object({
   player_id: z.string().min(1),
@@ -27,6 +28,22 @@ function emitToRoom(roomId: string, event: string, payload: unknown) {
   }
 }
 
+/* ── Pure handlers (called by notifications.ts from the engine) ──── */
+
+export function handleQuestionFinished(roomId: string, data: QuestionFinishedPayload): void {
+  emitToRoom(roomId, 'question-feedback', data)
+}
+
+export function handleNextQuestion(roomId: string, data: unknown): void {
+  emitToRoom(roomId, 'next-question', data)
+}
+
+export function handleGameFinished(roomId: string): void {
+  emitToRoom(roomId, 'game-finished', {})
+}
+
+/* ── Express handlers (kept for backward compat; no longer routed) ─ */
+
 export function questionFinished(req: Request, res: Response) {
   const parsed = questionFinishedSchema.safeParse(req.body)
   if (!parsed.success) {
@@ -34,16 +51,16 @@ export function questionFinished(req: Request, res: Response) {
     return
   }
 
-  emitToRoom(req.params.id as string, 'question-feedback', parsed.data)
+  handleQuestionFinished(req.params.id as string, parsed.data)
   res.json({ message: 'Question finished event broadcasted' })
 }
 
 export function nextQuestion(req: Request, res: Response) {
-  emitToRoom(req.params.id as string, 'next-question', req.body ?? {})
+  handleNextQuestion(req.params.id as string, req.body ?? {})
   res.json({ message: 'Next question event broadcasted' })
 }
 
 export function gameFinished(req: Request, res: Response) {
-  emitToRoom(req.params.id as string, 'game-finished', {})
+  handleGameFinished(req.params.id as string)
   res.json({ message: 'Game finished event broadcasted' })
 }

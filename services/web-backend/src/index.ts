@@ -3,6 +3,7 @@ import app from './app.js'
 import { config } from './config/index.js'
 import { prisma } from './lib/prisma.js'
 import { initSocket, getIO } from './lib/socket.js'
+import { store } from './engine/room-store.js'
 import logger from './lib/logger.js'
 
 const httpServer = createServer(app)
@@ -21,6 +22,11 @@ const purgeInterval = setInterval(async () => {
     logger.error({ event: 'purge-revoked-tokens-error', err }, 'Failed to purge expired revoked tokens')
   }
 }, 60 * 60 * 1000)
+
+// Clean up expired finished rooms every 5 minutes
+const roomCleanupInterval = setInterval(() => {
+  store.cleanupExpired()
+}, 5 * 60 * 1000)
 
 httpServer.listen(config.port, () => {
   logger.info({ event: 'server-start', port: config.port }, 'Server started')
@@ -46,7 +52,12 @@ function gracefulShutdown(signal: string) {
   clearInterval(purgeInterval)
   logger.info('Purge interval cleared')
 
-  // 4. Disconnect Prisma
+  // 4. Clear the room cleanup interval and clean up room timers
+  clearInterval(roomCleanupInterval)
+  store.cleanupOnShutdown()
+  logger.info('Room cleanup interval cleared and room timers cancelled')
+
+  // 5. Disconnect Prisma
   prisma.$disconnect().then(() => {
     logger.info('Prisma disconnected')
     process.exit(0)

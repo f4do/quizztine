@@ -2,7 +2,7 @@ import { Server as HTTPServer } from 'http'
 import { Server } from 'socket.io'
 import type { AuthenticatedRequest } from '../middleware/auth.js'
 import { config } from '../config/index.js'
-import { engineClient } from './engine-client.js'
+import { gameEngine } from '../engine/index.js'
 import logger from './logger.js'
 
 let io: Server
@@ -47,7 +47,7 @@ export function initSocket(httpServer: HTTPServer) {
       socket.to(`room:${data.roomId}`).emit('player-left', {
         playerId: data.playerId,
       })
-      engineClient.removePlayer(data.roomId, data.playerId).catch(() => {})
+      gameEngine.removePlayer(data.roomId, data.playerId)
     })
 
     socket.on('player-ready', (data: { roomId: string; playerId: string; ready: boolean }) => {
@@ -67,9 +67,9 @@ export function initSocket(httpServer: HTTPServer) {
         playerId: data.playerId,
         questionId: data.questionId,
       })
-      // Forward to quiz-engine for scoring.
+      // Forward to in-process engine for scoring.
       try {
-        await engineClient.submitAnswer(data.roomId, data.playerId, {
+        await gameEngine.submitAnswer(data.roomId, data.playerId, {
           question_id: data.questionId,
           selected_choices: data.selectedChoices,
           client_timestamp: data.clientTimestamp,
@@ -88,7 +88,7 @@ export function initSocket(httpServer: HTTPServer) {
         socket.to(`room:${info.roomId}`).emit('player-left', {
           playerId: info.playerId,
         })
-        engineClient.removePlayer(info.roomId, info.playerId).catch(() => {})
+        gameEngine.removePlayer(info.roomId, info.playerId)
       }
       logger.info({ event: 'socket-disconnected', socketId: socket.id }, 'Socket disconnected')
     })

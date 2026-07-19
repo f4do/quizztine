@@ -1,6 +1,7 @@
 import { prisma } from '../lib/prisma.js'
 import { ValidationError, ForbiddenError } from '../types/errors.js'
-import { engineClient } from '../lib/engine-client.js'
+import { gameEngine } from '../engine/index.js'
+import type { RoomMode } from '../engine/types.js'
 import logger from '../lib/logger.js'
 import type { Response } from 'express'
 import type { AuthenticatedRequest } from '../middleware/auth.js'
@@ -98,10 +99,10 @@ export async function createRoom(req: AuthenticatedRequest, res: Response) {
 
   // Call quiz-engine to register the room
   try {
-    await engineClient.createRoom({
+    await gameEngine.createRoom({
       id: room.id,
       questions: enginePayload.questions,
-      mode: enginePayload.mode,
+      mode: enginePayload.mode as RoomMode,
       timer: enginePayload.timer,
       code: room.code,
       creator_player_id: creatorPlayerId,
@@ -139,14 +140,14 @@ export async function getRoomByCode(req: AuthenticatedRequest, res: Response) {
 
 export async function getRoomState(req: AuthenticatedRequest, res: Response) {
   const roomId = req.params.id as string
-  const data = await engineClient.getRoom(roomId)
+  const data = await gameEngine.getRoom(roomId)
   res.json(data)
 }
 
 export async function joinRoom(req: AuthenticatedRequest, res: Response) {
   const roomId = req.params.id as string
   const { player_id, nickname } = req.body as { player_id: string; nickname: string }
-  await engineClient.joinRoom(roomId, { player_id, nickname })
+  await gameEngine.joinRoom(roomId, { player_id, nickname })
 
   // Map authenticated user to player session for stats attribution
   if (req.user) {
@@ -163,20 +164,20 @@ export async function joinRoom(req: AuthenticatedRequest, res: Response) {
 export async function startGame(req: AuthenticatedRequest, res: Response) {
   const roomId = req.params.id as string
   const playerId = req.query.player_id as string
-  await engineClient.startGame(roomId, playerId)
+  await gameEngine.startGame(roomId, playerId)
   res.json({ status: 'started' })
 }
 
 export async function getCurrentQuestion(req: AuthenticatedRequest, res: Response) {
   const roomId = req.params.id as string
   const playerId = req.params.playerId as string
-  const data = await engineClient.getCurrentQuestion(roomId, playerId)
+  const data = await gameEngine.getCurrentQuestion(roomId, playerId)
   res.json(data)
 }
 
 export async function getScoreboard(req: AuthenticatedRequest, res: Response) {
   const roomId = req.params.id as string
-  const data = await engineClient.getScoreboard(roomId)
+  const data = await gameEngine.getScoreboard(roomId)
   res.json(data)
 }
 
@@ -216,7 +217,7 @@ export async function replayRoom(req: AuthenticatedRequest, res: Response) {
   })
 
   // Call engine to replace questions and reset the room
-  await engineClient.replayRoom(roomId, { questions: newQuestions })
+  await gameEngine.replayRoom(roomId, { questions: newQuestions })
 
   // Broadcast to all players so they return to pre-game
   try {

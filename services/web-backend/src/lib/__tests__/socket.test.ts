@@ -2,8 +2,8 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import http from 'http'
 import { io as ioc, type Socket as ClientSocket } from 'socket.io-client'
 
-vi.mock('../engine-client.js', () => ({
-  engineClient: {
+vi.mock('../../engine/index.js', () => ({
+  gameEngine: {
     removePlayer: vi.fn().mockResolvedValue(undefined),
     submitAnswer: vi.fn().mockResolvedValue({
       correct: true,
@@ -219,7 +219,7 @@ describe('Socket.IO', () => {
 
   it('removes player from engine on disconnect after player-joined', { timeout: 5000 }, async () => {
     const port = await createServer()
-    const { engineClient } = await import('../engine-client.js')
+    const { gameEngine } = await import('../../engine/index.js')
 
     const client = await connectClient(port)
     client.emit('player-joined', { roomId: 'room-5', playerId: 'p-disconnect', nickname: 'Disc' })
@@ -232,7 +232,7 @@ describe('Socket.IO', () => {
     // Wait for disconnect to propagate
     await new Promise((r) => setTimeout(r, 500))
 
-    // engineClient.removePlayer should have been called
-    expect(engineClient.removePlayer).toHaveBeenCalledWith('room-5', 'p-disconnect')
+    // gameEngine.removePlayer should have been called
+    expect(gameEngine.removePlayer).toHaveBeenCalledWith('room-5', 'p-disconnect')
   })
 })

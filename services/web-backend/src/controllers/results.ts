@@ -26,15 +26,16 @@ const resultsSchema = z.object({
   answers: z.array(answerSchema),
 })
 
-export async function receiveResults(req: Request, res: Response) {
-  const parsed = resultsSchema.safeParse(req.body)
-  if (!parsed.success) {
-    throw new ValidationError('Invalid results payload', parsed.error.issues)
-  }
+export type ScoreEntry = z.infer<typeof scoreSchema>
+export type AnswerEntry = z.infer<typeof answerSchema>
 
-  const { scores, answers } = parsed.data
-  const roomId = req.params.id as string
+/* ── Pure handler (called by notifications.ts from the engine) ───── */
 
+export async function handleReceiveResults(
+  roomId: string,
+  scores: ScoreEntry[],
+  answers: AnswerEntry[],
+): Promise<void> {
   await prisma.$transaction(async (tx) => {
     const room = await tx.room.findUnique({ where: { id: roomId } })
     if (!room) {
@@ -48,7 +49,7 @@ export async function receiveResults(req: Request, res: Response) {
     await tx.playerScore.deleteMany({ where: { gameResult: { roomId } } })
     await tx.gameResult.deleteMany({ where: { roomId } })
 
-    const gameResult = await tx.gameResult.create({
+    await tx.gameResult.create({
       data: {
         roomId,
         mode: room.mode,
@@ -130,8 +131,6 @@ export async function receiveResults(req: Request, res: Response) {
         })
       }
     }
-
-    return gameResult
   })
 
   logger.info({ event: 'room-finished', roomId, scores }, 'Room finished')
@@ -141,9 +140,25 @@ export async function receiveResults(req: Request, res: Response) {
   } catch {
     // Socket.IO may not be initialized in tests; events are best-effort.
   }
+}
+
+/* ── Express handler (parses req/res, delegates to handleReceiveResults) ─ */
+
+export async function receiveResults(req: Request, res: Response) {
+  const parsed = resultsSchema.safeParse(req.body)
+  if (!parsed.success) {
+    throw new ValidationError('Invalid results payload', parsed.error.issues)
+  }
+
+  const { scores, answers } = parsed.data
+  const roomId = req.params.id as string
+
+  await handleReceiveResults(roomId, scores, answers)
 
   res.json({ message: 'Results received' })
 }
+
+/* ── Other Express handlers (unchanged) ──────────────────────────── */
 
 export async function getResults(req: Request, res: Response) {
   const roomId = req.params.id as string

@@ -3,11 +3,11 @@ import type { Response } from 'express'
 import { createRoom } from '../rooms.js'
 import type { AuthenticatedRequest } from '../../middleware/auth.js'
 
-const { mockFindMany, mockCreate, mockRoomDelete, mockEngineCreateRoom } = vi.hoisted(() => ({
+const { mockFindMany, mockCreate, mockRoomDelete, mockGameEngineCreateRoom } = vi.hoisted(() => ({
   mockFindMany: vi.fn(),
   mockCreate: vi.fn(),
   mockRoomDelete: vi.fn(),
-  mockEngineCreateRoom: vi.fn(),
+  mockGameEngineCreateRoom: vi.fn(),
 }))
 
 vi.mock('../../lib/prisma.js', () => ({
@@ -18,8 +18,8 @@ vi.mock('../../lib/prisma.js', () => ({
   },
 }))
 
-vi.mock('../../lib/engine-client.js', () => ({
-  engineClient: { createRoom: mockEngineCreateRoom },
+vi.mock('../../engine/index.js', () => ({
+  gameEngine: { createRoom: mockGameEngineCreateRoom },
 }))
 
 const publicQuestions = [
@@ -59,7 +59,7 @@ describe('createRoom question filtering', () => {
   it('non-auth solo: public only, includePrivate ignored', async () => {
     mockFindMany.mockResolvedValue(publicQuestions)
     mockCreate.mockResolvedValue({ id: 'r1', code: 'ABC123', mode: 'solo', timer: 30 })
-    mockEngineCreateRoom.mockResolvedValue({ id: 'r1' })
+    mockGameEngineCreateRoom.mockResolvedValue({ id: 'r1' })
 
     const req = mockReq({ body: { mode: 'solo', includePrivate: true } })
     const res = mockRes()
@@ -78,7 +78,7 @@ describe('createRoom question filtering', () => {
   it('USER role: public only, includePrivate ignored', async () => {
     mockFindMany.mockResolvedValue(publicQuestions)
     mockCreate.mockResolvedValue({ id: 'r1', code: 'ABC123', mode: 'solo', timer: 30 })
-    mockEngineCreateRoom.mockResolvedValue({ id: 'r1' })
+    mockGameEngineCreateRoom.mockResolvedValue({ id: 'r1' })
 
     const req = mockReq({
       user: { id: 'u1', pseudo: 'bob', email: 'b@t.com', role: 'USER' },
@@ -93,7 +93,7 @@ describe('createRoom question filtering', () => {
   it('quizmaster with includePrivate=false: public only', async () => {
     mockFindMany.mockResolvedValue(publicQuestions)
     mockCreate.mockResolvedValue({ id: 'r1', code: 'ABC123', mode: 'solo', timer: 30 })
-    mockEngineCreateRoom.mockResolvedValue({ id: 'r1' })
+    mockGameEngineCreateRoom.mockResolvedValue({ id: 'r1' })
 
     const req = mockReq({
       user: { id: 'u1', pseudo: 'qm1', email: 'qm@t.com', role: 'QUIZMASTER' },
@@ -108,7 +108,7 @@ describe('createRoom question filtering', () => {
   it('quizmaster with includePrivate=true: own private + public', async () => {
     mockFindMany.mockResolvedValue([...publicQuestions, ...ownPrivateQuestions])
     mockCreate.mockResolvedValue({ id: 'r1', code: 'ABC123', mode: 'solo', timer: 30 })
-    mockEngineCreateRoom.mockResolvedValue({ id: 'r1' })
+    mockGameEngineCreateRoom.mockResolvedValue({ id: 'r1' })
 
     const req = mockReq({
       user: { id: 'u1', pseudo: 'qm1', email: 'qm@t.com', role: 'QUIZMASTER' },
@@ -127,7 +127,7 @@ describe('createRoom question filtering', () => {
   it('quizadmin with includePrivate=true: own private + public (same as quizmaster)', async () => {
     mockFindMany.mockResolvedValue([...publicQuestions, ...ownPrivateQuestions])
     mockCreate.mockResolvedValue({ id: 'r1', code: 'ABC123', mode: 'solo', timer: 30 })
-    mockEngineCreateRoom.mockResolvedValue({ id: 'r1' })
+    mockGameEngineCreateRoom.mockResolvedValue({ id: 'r1' })
 
     const req = mockReq({
       user: { id: 'u1', pseudo: 'admin', email: 'a@t.com', role: 'QUIZADMIN' },
@@ -148,7 +148,7 @@ describe('createRoom response shape', () => {
   it('solo room: no inviteLink', async () => {
     mockFindMany.mockResolvedValue(publicQuestions)
     mockCreate.mockResolvedValue({ id: 'r1', code: 'ABC123', mode: 'solo', timer: 30 })
-    mockEngineCreateRoom.mockResolvedValue({ id: 'r1' })
+    mockGameEngineCreateRoom.mockResolvedValue({ id: 'r1' })
 
     const req = mockReq({ body: { mode: 'solo' } })
     const res = mockRes()
@@ -162,7 +162,7 @@ describe('createRoom response shape', () => {
   it('multiplayer room: includes inviteLink', async () => {
     mockFindMany.mockResolvedValue(publicQuestions)
     mockCreate.mockResolvedValue({ id: 'r1', code: 'ABC123', mode: 'multi_public', timer: 30 })
-    mockEngineCreateRoom.mockResolvedValue({ id: 'r1' })
+    mockGameEngineCreateRoom.mockResolvedValue({ id: 'r1' })
 
     const req = mockReq({
       user: { id: 'u1', pseudo: 'bob', email: 'b@t.com', role: 'USER' },
