@@ -171,3 +171,20 @@ model RevokedToken {
   @@index([tokenHash])
   @@index([expiresAt])
 }
+
+enum HostAvatarType {
+  BUILTIN
+  UPLOAD
+  URL
+}
+
+model Host {
+  id           String         @id @default(uuid())
+  name         String
+  avatarType   HostAvatarType @default(BUILTIN)
+  avatarConfig Json           @default("{\"topType\":\"LongHairStraight2\",\"hairColor\":\"Red\",\"accessoriesType\":\"Blank\",\"facialHairType\":\"Blank\",\"facialHairColor\":\"Blank\",\"clotheType\":\"ShirtVNeck\",\"clotheColor\":\"Pink\",\"skinColor\":\"Brown\"}")
+  avatarUrl    String?
+  isActive     Boolean        @default(false)
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+}

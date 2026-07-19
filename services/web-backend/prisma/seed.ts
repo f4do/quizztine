@@ -131,6 +131,52 @@ async function main() {
   }
   console.log(`${questions.length} questions created (upsert).`)
 
+  // Seed default hosts
+  await prisma.host.upsert({
+    where: { id: 'default-host' },
+    update: { name: 'Christine' },
+    create: {
+      id: 'default-host',
+      name: 'Christine',
+      avatarType: 'BUILTIN',
+      avatarConfig: {
+        topType: 'LongHairStraight2',
+        hairColor: 'Red',
+        accessoriesType: 'Blank',
+        facialHairType: 'Blank',
+        facialHairColor: 'Blank',
+        clotheType: 'ShirtVNeck',
+        clotheColor: 'Pink',
+        skinColor: 'Brown',
+      },
+      isActive: true,
+    },
+  })
+  console.log('Host Christine created.')
+
+  await prisma.host.upsert({
+    where: { id: 'default-host-christian' },
+    update: { name: 'Christian' },
+    create: {
+      id: 'default-host-christian',
+      name: 'Christian',
+      avatarType: 'BUILTIN',
+      avatarConfig: {
+        topType: 'ShortHairSides',
+        hairColor: 'Platinum',
+        accessoriesType: 'Blank',
+        facialHairType: 'MoustacheMagnum',
+        facialHairColor: 'Platinum',
+        clotheType: 'BlazerSweater',
+        clotheColor: 'Gray02',
+        skinColor: 'Pale',
+        spotColor: '#E8A87C',
+      },
+      isActive: false,
+    },
+  })
+  console.log('Host Christian created.')
+
   console.log('\n--- Seed complete ---')
   console.log('user:    user@quizztine.app / user     (USER)')
   console.log('master1: master1@quizztine.app / master1 (QUIZMASTER)')

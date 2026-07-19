@@ -14,6 +14,7 @@ import roomRouter from './routes/rooms.js'
 import reportRouter from './routes/reports.js'
 import categoryRouter from './routes/categories.js'
 import userRouter from './routes/users.js'
+import hostRouter from './routes/host.js'
 import { globalLimiter } from './middleware/rate-limit.js'
 import { errorHandler } from './middleware/error-handler.js'
 
@@ -35,6 +36,7 @@ app.use(roomRouter)
 app.use(reportRouter)
 app.use(categoryRouter)
 app.use(userRouter)
+app.use(hostRouter)
 app.use('/uploads', express.static(config.uploadDir))
 
 // Serve built frontend (monoconteneur — production only)
