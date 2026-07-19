@@ -66,10 +66,9 @@ export const gameEngine = {
   async createRoom(data: CreateRoomParams): Promise<CreateRoomResponse> {
     const room = store.create(data)
 
-    // Solo rooms auto-start
-    if (room.mode === 'solo') {
-      flow.startGame(room.id, null)
-    }
+    // Solo rooms are NOT auto-started here — the frontend player joins first,
+    // then handleSoloStart calls startGame.  This avoids the "Game already
+    // started" error when joinRoom checks status !== 'waiting'.
 
     logger.info(
       { event: 'room-created', roomId: room.id, mode: room.mode, questions: room.questions.length },

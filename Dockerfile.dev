@@ -1,11 +1,14 @@
 FROM node:24-slim
 
+RUN apt-get update -y && apt-get install -y --no-install-recommends openssl && rm -rf /var/lib/apt/lists/*
+
 RUN npm install -g pnpm@11.15.0 concurrently
 
 # ── Backend dependencies ────────────────────────────────────────
 WORKDIR /app/web-backend
 COPY services/web-backend/package.json services/web-backend/pnpm-lock.yaml services/web-backend/.npmrc services/web-backend/pnpm-workspace.yaml ./
 COPY services/web-backend/prisma ./prisma
+COPY services/web-backend/prisma.config.ts ./
 
 RUN pnpm install && pnpm prisma generate
 
@@ -31,8 +34,10 @@ COPY services/frontend/tsconfig.node.json ./
 EXPOSE 3000 5173
 
 WORKDIR /app
-CMD ["concurrently", \
-  "--names", "backend,frontend", \
-  "--prefix-colors", "blue,green", \
-  "pnpm --dir /app/web-backend dev", \
-  "npm --prefix /app/frontend run dev"]
+# Run migrations + seed, then start both services
+CMD cd /app/web-backend && pnpm prisma db push --accept-data-loss 2>&1; \
+  pnpm prisma db seed 2>&1; \
+  cd /app && \
+  concurrently --names backend,frontend --prefix-colors blue,green \
+    "pnpm --dir /app/web-backend dev" \
+    "npm --prefix /app/frontend run dev"

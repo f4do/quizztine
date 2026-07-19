@@ -50,7 +50,7 @@ async function answerAndAdvance(
   await vi.advanceTimersByTimeAsync(FEEDBACK_DELAY_MS + 200)
 }
 
-/** Set up a solo game by directly using store + flow (since createRoom auto-starts). */
+/** Set up a solo game by directly using store + flow (player joins first, then starts). */
 function setupSolo(overrides?: Partial<CreateRoomParams>): string {
   const id = overrides?.id ?? 'solo-test'
   const params: CreateRoomParams = {
@@ -103,7 +103,7 @@ afterEach(() => {
 /* ================================================================== */
 
 describe('CreateRoom', () => {
-  it('creates a solo room and auto-starts it', async () => {
+  it('creates a solo room in waiting state (join + start flow)', async () => {
     const res = await gameEngine.createRoom({
       id: 'solo-1',
       mode: 'solo',
@@ -115,7 +115,12 @@ describe('CreateRoom', () => {
     expect(res.question_count).toBe(1)
 
     const room = store.get('solo-1')!
-    // Solo rooms auto-start -> status = playing
+    // Solo rooms no longer auto-start — player must join first
+    expect(room.status).toBe('waiting')
+
+    // Join, then start (matches handleSoloStart flow)
+    await gameEngine.joinRoom('solo-1', { player_id: 'p1', nickname: 'Alice' })
+    await gameEngine.startGame('solo-1', 'p1')
     expect(room.status).toBe('playing')
   })
 
