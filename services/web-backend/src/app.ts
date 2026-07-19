@@ -1,4 +1,6 @@
 import express, { type Express } from 'express'
+import path from 'path'
+import { fileURLToPath } from 'url'
 import cookieParser from 'cookie-parser'
 import cors from 'cors'
 import pinoHttp from 'pino-http'
@@ -14,6 +16,8 @@ import categoryRouter from './routes/categories.js'
 import userRouter from './routes/users.js'
 import { authLimiter, globalLimiter } from './middleware/rate-limit.js'
 import { errorHandler } from './middleware/error-handler.js'
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 const app: Express = express()
 
@@ -33,6 +37,19 @@ app.use(reportRouter)
 app.use(categoryRouter)
 app.use(userRouter)
 app.use('/uploads', express.static(config.uploadDir))
+
+// Serve built frontend (monoconteneur — production only)
+const frontendDist = path.resolve(__dirname, '../../frontend/dist')
+app.use(express.static(frontendDist))
+
+// SPA fallback: let React Router handle all non-API routes
+// Use Accept header to distinguish browser navigation (text/html) from API calls (application/json)
+app.use((req, res, next) => {
+  if (req.method !== 'GET' || !req.accepts('html')) return next()
+  res.sendFile(path.join(frontendDist, 'index.html'), (err) => {
+    if (err) next()
+  })
+})
 
 app.use(errorHandler)
 

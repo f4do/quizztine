@@ -15,40 +15,29 @@ services:
       timeout: 5s
       retries: 5
 
-  web-backend:
+  app:
     build:
-      context: ./services/web-backend
+      context: .
       dockerfile: Dockerfile.dev
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
     ports:
       - "3000:3000"
+      - "5173:5173"
     environment:
       DATABASE_URL: postgresql://postgres:postgres@postgres:5432/quizztine
       JWT_SECRET: dev-secret-change-in-production
       CORS_ORIGIN: http://localhost:5173
       UPLOAD_DIR: /app/uploads
     volumes:
-      - ./services/web-backend/src:/app/src
-      - ./services/web-backend/prisma:/app/prisma
+      - ./services/web-backend/src:/app/web-backend/src
+      - ./services/web-backend/prisma:/app/web-backend/prisma
+      - ./services/frontend/src:/app/frontend/src
+      - ./services/frontend/public:/app/frontend/public
+      - ./services/frontend/index.html:/app/frontend/index.html
+      - ./services/frontend/vite.config.ts:/app/frontend/vite.config.ts
       - uploads:/app/uploads
-
-  frontend:
-    build:
-      context: ./services/frontend
-      dockerfile: Dockerfile.dev
-    ports:
-      - "5173:5173"
-    environment:
-      VITE_API_URL: http://localhost:3000
-      VITE_DEFAULT_LANG: fr
-    volumes:
-      - ./services/frontend/public:/app/public
-      - ./services/frontend/src:/app/src
-      - ./services/frontend/index.html:/app/index.html
-      - ./services/frontend/vite.config.ts:/app/vite.config.ts
-      - ./services/frontend/tsconfig.json:/app/tsconfig.json
-      - ./services/frontend/tsconfig.app.json:/app/tsconfig.app.json
 
 volumes:
   pgdata:

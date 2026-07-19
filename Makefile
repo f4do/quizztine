@@ -1,13 +1,10 @@
-.PHONY: dev dev-backend dev-frontend dev-down build rebuild seed test test-backend test-frontend lint lint-frontend lint-backend typecheck typecheck-frontend prod-build prod-up prod-down
+.PHONY: dev dev-app dev-down build rebuild seed test test-backend test-frontend lint lint-frontend lint-backend typecheck typecheck-frontend typecheck-backend prod-build prod-up prod-down
 
 dev:
 	docker compose up
 
-dev-backend:
-	docker compose up postgres web-backend
-
-dev-frontend:
-	docker compose up frontend
+dev-app:
+	docker compose up postgres app
 
 dev-down:
 	docker compose down -v
@@ -19,9 +16,9 @@ rebuild: build
 	docker compose up -d --force-recreate
 
 seed:
-	docker compose exec web-backend pnpm prisma generate && \
-	docker compose exec web-backend pnpm prisma db push && \
-	docker compose exec web-backend pnpm tsx prisma/seed.ts
+	docker compose exec app pnpm --dir /app/web-backend prisma generate && \
+	docker compose exec app pnpm --dir /app/web-backend prisma db push && \
+	docker compose exec app pnpm --dir /app/web-backend tsx prisma/seed.ts
 
 test: test-backend test-frontend
 
@@ -39,10 +36,13 @@ lint-frontend:
 lint-backend:
 	cd services/web-backend && pnpm lint
 
-typecheck: typecheck-frontend
+typecheck: typecheck-frontend typecheck-backend
 
 typecheck-frontend:
 	cd services/frontend && pnpm typecheck
+
+typecheck-backend:
+	cd services/web-backend && pnpm typecheck
 
 prod-build:
 	docker compose -f docker-compose.prod.yml build

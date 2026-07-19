@@ -1,0 +1,38 @@
+FROM node:24-slim
+
+RUN npm install -g pnpm@11.15.0 concurrently
+
+# ── Backend dependencies ────────────────────────────────────────
+WORKDIR /app/web-backend
+COPY services/web-backend/package.json services/web-backend/pnpm-lock.yaml services/web-backend/.npmrc services/web-backend/pnpm-workspace.yaml ./
+COPY services/web-backend/prisma ./prisma
+
+RUN pnpm install && pnpm prisma generate
+
+# ── Frontend dependencies ───────────────────────────────────────
+WORKDIR /app/frontend
+COPY services/frontend/package.json services/frontend/.npmrc ./
+RUN npm install
+
+# ── Source code ─────────────────────────────────────────────────
+WORKDIR /app/web-backend
+COPY services/web-backend/src ./src
+COPY services/web-backend/tsconfig.json ./
+
+WORKDIR /app/frontend
+COPY services/frontend/src ./src
+COPY services/frontend/public ./public
+COPY services/frontend/index.html ./
+COPY services/frontend/vite.config.ts ./
+COPY services/frontend/tsconfig.json ./
+COPY services/frontend/tsconfig.app.json ./
+COPY services/frontend/tsconfig.node.json ./
+
+EXPOSE 3000 5173
+
+WORKDIR /app
+CMD ["concurrently", \
+  "--names", "backend,frontend", \
+  "--prefix-colors", "blue,green", \
+  "pnpm --dir /app/web-backend dev", \
+  "npm --prefix /app/frontend run dev"]
