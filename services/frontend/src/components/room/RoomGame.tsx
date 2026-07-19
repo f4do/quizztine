@@ -41,7 +41,6 @@ interface RoomGameProps {
 }
 
 export default function RoomGame({
-  phase,
   questionId,
   questionIndex,
   totalQuestions,

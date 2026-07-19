@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { Socket } from "socket.io-client";
 import { api, mediaUrl } from "./api";
@@ -14,6 +14,9 @@ import {
   hashStr,
   seededShuffle,
 } from "./useRoomGameTypes";
+import { useGameTimer } from "./useGameTimer";
+import { useChristineMessages } from "./useChristineMessages";
+import type { ChristineExpression } from "../components/christine/ChristinePresenter";
 
 /* ── Hook return type ──────────────────────────────────────────────── */
 export interface UseRoomGameReturn {
@@ -48,7 +51,7 @@ export interface UseRoomGameReturn {
   feedbackCountdown: number;
   feedbackMeta: FeedbackMeta;
   christineMessage: string;
-  christineExpression: string;
+  christineExpression: ChristineExpression;
   answeredCount: number;
   totalActive: number;
   isFeedback: boolean;
@@ -106,11 +109,9 @@ export function useRoomGame(roomId: string): UseRoomGameReturn {
   const [selectedChoices, setSelectedChoices] = useState<number[]>([]);
   const [choiceCorrect, setChoiceCorrect] = useState<boolean[]>([]);
   const [choiceOrder, setChoiceOrder] = useState<number[]>([]);
-  const [timeLeft, setTimeLeft] = useState(0);
 
   const [result, setResult] = useState<AnswerResult | null>(null);
   const [scoreboard, setScoreboard] = useState<ScoreboardEntry[]>([]);
-  const [timerExpired, setTimerExpired] = useState(false);
   const [soloStarting, setSoloStarting] = useState(false);
   const [joining, setJoining] = useState(false);
   const [isReplaying, setIsReplaying] = useState(false);
@@ -118,19 +119,23 @@ export function useRoomGame(roomId: string): UseRoomGameReturn {
   const [isReady, setIsReady] = useState(false);
 
   const [hasAnswered, setHasAnswered] = useState(false);
-  const [feedbackCountdown, setFeedbackCountdown] = useState(0);
-  const feedbackTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const [feedbackMeta, setFeedbackMeta] = useState<FeedbackMeta>({
+    correct: false,
+    onlyCorrect: false,
+    firstCorrect: false,
+    onlyWrong: false,
+    difficulty: null,
+  });
 
   /* ── refs ───────────────────────────────────────────────────────── */
   const socketRef = useRef<Socket | null>(null);
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const questionIdRef = useRef(0);
   const playerIdRef = useRef(playerId);
   const phaseRef = useRef(phase);
   phaseRef.current = phase;
   const choiceOrderRef = useRef<number[]>([]);
   const reconnectRef = useRef<{ pid: string; nickname: string } | null>(null);
-  const prevTimeLeft = useRef(0);
 
   /* ── custom questionId setter (keeps ref in sync) ──────────────── */
   const setQuestionId = (n: number) => {
@@ -141,6 +146,59 @@ export function useRoomGame(roomId: string): UseRoomGameReturn {
   /* ── creator data from sessionStorage ──────────────────────────── */
   const creatorPid = sessionStorage.getItem(`creatorPid-${roomId}`);
   const creatorNick = sessionStorage.getItem(`creatorNick-${roomId}`);
+
+  /* ── submitAnswer (needed by timer expire & handlers) ──────────── */
+  const submitAnswer = useCallback((choices: number[]) => {
+    if (!socketRef.current || hasAnswered) return;
+    setHasAnswered(true);
+
+    setRoom((prev) =>
+      prev
+        ? {
+            ...prev,
+            players: prev.players.map((p) =>
+              p.id === playerIdRef.current ? { ...p, answered: true } : p,
+            ),
+          }
+        : prev,
+    );
+    const dbChoices = choices.map((i) => choiceOrder[i] ?? i);
+    socketRef.current.emit("answer", {
+      roomId,
+      playerId: playerIdRef.current,
+      questionId: questionIdRef.current,
+      selectedChoices: dbChoices,
+      clientTimestamp: Date.now(),
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [roomId, hasAnswered, choiceOrder]);
+
+  /* ── timer expire handler (ref to avoid stale closures) ────────── */
+  const submitAnswerRef = useRef(submitAnswer);
+  submitAnswerRef.current = submitAnswer;
+  const setPhaseRef = useRef(setPhase);
+  setPhaseRef.current = setPhase;
+
+  const onTimerExpire = useCallback(() => {
+    submitAnswerRef.current([]);
+    setPhaseRef.current("feedback");
+  }, []);
+
+  /* ── timer hook ────────────────────────────────────────────────── */
+  const {
+    timeLeft,
+    feedbackCountdown,
+    clearTimer,
+    clearFeedbackTimer,
+    startFeedbackCountdown,
+    timerExpired,
+  } = useGameTimer({
+    phase,
+    roomTimer: room?.timer ?? 30,
+    questionId,
+    hasAnswered,
+    onExpire: onTimerExpire,
+  });
 
   /* ── effects ────────────────────────────────────────────────────── */
   // Pre-fill nickname from auth
@@ -175,31 +233,84 @@ export function useRoomGame(roomId: string): UseRoomGameReturn {
         }
       })
       .catch(() => setError(t("room.not_found")));
-  }, [roomId]);
-
-  const clearTimer = useCallback(() => {
-    if (timerRef.current) {
-      clearInterval(timerRef.current);
-      timerRef.current = null;
-    }
-  }, []);
-
-  const clearFeedbackTimer = useCallback(() => {
-    if (feedbackTimerRef.current) {
-      clearInterval(feedbackTimerRef.current);
-      feedbackTimerRef.current = null;
-    }
-  }, []);
-
-  const [feedbackMeta, setFeedbackMeta] = useState<FeedbackMeta>({
-    correct: false,
-    onlyCorrect: false,
-    firstCorrect: false,
-    onlyWrong: false,
-    difficulty: null,
-  });
+  }, [roomId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* ── socket lifecycle ──────────────────────────────────────────── */
+  const fetchQuestion = useCallback(async () => {
+    try {
+      const q = (await api(
+        `/rooms/${roomId}/current-question/${playerIdRef.current}`,
+      )) as { question_id: number; index: number };
+      setQuestionId(q.question_id);
+      setQuestionIndex(q.index);
+      setSelectedChoices([]);
+      setHasAnswered(false);
+      setRoom((prev) =>
+        prev
+          ? {
+              ...prev,
+              players: prev.players.map((p) => ({ ...p, answered: false })),
+            }
+          : prev,
+      );
+      const qResp = (await api(
+        `/questions/${q.question_id}?game=true`,
+      )) as {
+        question: {
+          text: string;
+          difficulty: string;
+          choices: { text: string; isCorrect?: boolean }[];
+          mediaUrl?: string | null;
+          mediaType?: string | null;
+          explanation?: string | null;
+          sourceUrl?: string | null;
+        };
+      };
+      // Deterministic shuffle so all players see the same order
+      const dbChoices = qResp.question.choices;
+      const dbIndices = dbChoices.map((_, i) => i);
+      const seed = hashStr(`${roomId}-${q.question_id}`);
+      seededShuffle(dbIndices, seed);
+      setChoiceOrder(dbIndices);
+      choiceOrderRef.current = dbIndices;
+      setQuestionChoices(dbIndices.map((i) => dbChoices[i]));
+      setChoiceCorrect(new Array(dbChoices.length).fill(false));
+      setQuestionText(qResp.question.text);
+      setQuestionDifficulty(qResp.question.difficulty);
+      setQuestionMediaUrl(mediaUrl(qResp.question.mediaUrl) ?? null);
+      setQuestionMediaType(qResp.question.mediaType ?? null);
+      setQuestionExplanation(qResp.question.explanation ?? null);
+      setQuestionSourceUrl(qResp.question.sourceUrl ?? null);
+      setPhase("game");
+    } catch {
+      setPhase("end");
+      loadScoreboard();
+    }
+  }, [roomId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const loadScoreboard = useCallback(async () => {
+    try {
+      const sb = (await api(
+        `/rooms/${roomId}/scoreboard`,
+      )) as ScoreboardEntry[];
+      setScoreboard(sb);
+    } catch {
+      /* ignore */
+    }
+  }, [roomId]);
+
+  // keep refs in sync for socket event handlers
+  const fetchQuestionRef = useRef(fetchQuestion);
+  fetchQuestionRef.current = fetchQuestion;
+  const loadScoreboardRef = useRef(loadScoreboard);
+  loadScoreboardRef.current = loadScoreboard;
+  const clearFeedbackTimerRef = useRef(clearFeedbackTimer);
+  clearFeedbackTimerRef.current = clearFeedbackTimer;
+  const clearTimerRef = useRef(clearTimer);
+  clearTimerRef.current = clearTimer;
+  const startFeedbackCountdownRef = useRef(startFeedbackCountdown);
+  startFeedbackCountdownRef.current = startFeedbackCountdown;
+
   useEffect(() => {
     const socket = getSocket(roomId);
     socketRef.current = socket;
@@ -257,7 +368,7 @@ export function useRoomGame(roomId: string): UseRoomGameReturn {
     });
 
     socket.on("game-started", () => {
-      fetchQuestion();
+      fetchQuestionRef.current();
     });
 
     socket.on("question-feedback", (data: QuestionFeedbackPayload) => {
@@ -265,7 +376,6 @@ export function useRoomGame(roomId: string): UseRoomGameReturn {
         return;
 
       // Update choiceCorrect from socket data for correct display
-      // (the REST API no longer exposes isCorrect when ?game=true)
       if (data.correct_choices && choiceOrderRef.current.length > 0) {
         const newChoiceCorrect = choiceOrderRef.current.map((dbIdx) =>
           data.correct_choices.includes(dbIdx),
@@ -299,20 +409,20 @@ export function useRoomGame(roomId: string): UseRoomGameReturn {
         });
       }
       setPhase("feedback");
-      clearTimer();
-      startFeedbackCountdown();
+      clearTimerRef.current();
+      startFeedbackCountdownRef.current();
     });
 
     socket.on("next-question", () => {
-      clearFeedbackTimer();
+      clearFeedbackTimerRef.current();
       setResult(null);
-      fetchQuestion();
+      fetchQuestionRef.current();
     });
 
     socket.on("game-finished", () => {
-      clearFeedbackTimer();
+      clearFeedbackTimerRef.current();
       setPhase("end");
-      loadScoreboard();
+      loadScoreboardRef.current();
     });
 
     socket.on(
@@ -331,12 +441,11 @@ export function useRoomGame(roomId: string): UseRoomGameReturn {
     );
 
     socket.on("room-replayed", () => {
-      clearFeedbackTimer();
+      clearFeedbackTimerRef.current();
       setPhase("ready");
       setResult(null);
       setScoreboard([]);
       setHasAnswered(false);
-      setTimerExpired(false);
       setSelectedChoices([]);
       setReadyPlayers(new Set());
       setIsReady(false);
@@ -383,7 +492,7 @@ export function useRoomGame(roomId: string): UseRoomGameReturn {
         } catch {
           /* best-effort */
         }
-        if (room?.status === "playing") fetchQuestion();
+        if (room?.status === "playing") fetchQuestionRef.current();
       };
       tryReconnect();
     }
@@ -402,40 +511,11 @@ export function useRoomGame(roomId: string): UseRoomGameReturn {
       if (pid && phaseRef.current !== "game") emitPlayerLeft(roomId, pid);
       window.removeEventListener("beforeunload", handleBeforeUnload);
       disconnectRoom(roomId);
-      clearTimer();
-      clearFeedbackTimer();
+      clearTimerRef.current();
+      clearFeedbackTimerRef.current();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [roomId, clearTimer, clearFeedbackTimer, room?.status]);
-
-  /* ── game timer ────────────────────────────────────────────────── */
-  useEffect(() => {
-    if (phase !== "game") return;
-    setTimeLeft(room?.timer ?? 30);
-    timerRef.current = setInterval(() => {
-      setTimeLeft((prev) => {
-        if (prev <= 1) {
-          clearTimer();
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-    return clearTimer;
-  }, [phase, room?.timer, clearTimer]);
-
-  /* ── timer expired detection ───────────────────────────────────── */
-  useEffect(() => {
-    if (phase !== "game" || questionId === 0 || hasAnswered) return;
-    if (prevTimeLeft.current > 0 && timeLeft === 0) {
-      setTimerExpired(true);
-      setPhase("feedback");
-      clearTimer();
-      submitAnswer([]);
-    }
-    prevTimeLeft.current = timeLeft;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [timeLeft, phase, questionId]);
+  }, [roomId]);
 
   /* ── feedback fallback (12s timeout) ────────────────────────────── */
   useEffect(() => {
@@ -446,93 +526,13 @@ export function useRoomGame(roomId: string): UseRoomGameReturn {
   }, [phase, questionId]);
 
   /* ── helpers ───────────────────────────────────────────────────── */
-  const startFeedbackCountdown = () => {
-    setFeedbackCountdown(5);
-    feedbackTimerRef.current = setInterval(() => {
-      setFeedbackCountdown((prev) => {
-        if (prev <= 1) {
-          clearFeedbackTimer();
-          setResult(null);
-          setTimeout(() => fetchQuestion(), 200);
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-  };
-
-  const fetchQuestion = async () => {
-    try {
-      const q = (await api(
-        `/rooms/${roomId}/current-question/${playerIdRef.current}`,
-      )) as { question_id: number; index: number };
-      setQuestionId(q.question_id);
-      setQuestionIndex(q.index);
-      setSelectedChoices([]);
-      setTimerExpired(false);
-      setHasAnswered(false);
-      setRoom((prev) =>
-        prev
-          ? {
-              ...prev,
-              players: prev.players.map((p) => ({ ...p, answered: false })),
-            }
-          : prev,
-      );
-      const qResp = (await api(
-        `/questions/${q.question_id}?game=true`,
-      )) as {
-        question: {
-          text: string;
-          difficulty: string;
-          choices: { text: string; isCorrect?: boolean }[];
-          mediaUrl?: string | null;
-          mediaType?: string | null;
-          explanation?: string | null;
-          sourceUrl?: string | null;
-        };
-      };
-      // Deterministic shuffle so all players see the same order
-      const dbChoices = qResp.question.choices;
-      const dbIndices = dbChoices.map((_, i) => i);
-      const seed = hashStr(`${roomId}-${q.question_id}`);
-      seededShuffle(dbIndices, seed);
-      setChoiceOrder(dbIndices);
-      choiceOrderRef.current = dbIndices;
-      setQuestionChoices(dbIndices.map((i) => dbChoices[i]));
-      setChoiceCorrect(new Array(dbChoices.length).fill(false));
-      setQuestionText(qResp.question.text);
-      setQuestionDifficulty(qResp.question.difficulty);
-      setQuestionMediaUrl(mediaUrl(qResp.question.mediaUrl) ?? null);
-      setQuestionMediaType(qResp.question.mediaType ?? null);
-      setQuestionExplanation(qResp.question.explanation ?? null);
-      setQuestionSourceUrl(qResp.question.sourceUrl ?? null);
-      setTimeLeft(room?.timer ?? 30);
-      setPhase("game");
-    } catch {
-      setPhase("end");
-      loadScoreboard();
-    }
-  };
-
-  const loadScoreboard = async () => {
-    try {
-      const sb = (await api(
-        `/rooms/${roomId}/scoreboard`,
-      )) as ScoreboardEntry[];
-      setScoreboard(sb);
-    } catch {
-      /* ignore */
-    }
-  };
-
   const formatError = (err: unknown, fallback: string) => {
     const message = err instanceof Error ? err.message : fallback;
     return message || fallback;
   };
 
   /* ── handlers ──────────────────────────────────────────────────── */
-  const handleJoin = async () => {
+  const handleJoin = useCallback(async () => {
     if (!nickname.trim() || joining || joined) return;
     setJoining(true);
     setError("");
@@ -559,9 +559,9 @@ export function useRoomGame(roomId: string): UseRoomGameReturn {
     } finally {
       setJoining(false);
     }
-  };
+  }, [nickname, joining, joined, playerId, creatorPid, roomId, t]);
 
-  const handleStart = async () => {
+  const handleStart = useCallback(async () => {
     try {
       await api(
         `/rooms/${roomId}/start?player_id=${playerIdRef.current}`,
@@ -572,9 +572,9 @@ export function useRoomGame(roomId: string): UseRoomGameReturn {
     } catch (err) {
       setError(formatError(err, t("room.start_failed")));
     }
-  };
+  }, [roomId, fetchQuestion, t]);
 
-  const handleSoloStart = async () => {
+  const handleSoloStart = useCallback(async () => {
     if (soloStarting) return;
     if (joined) {
       await handleStart();
@@ -606,9 +606,9 @@ export function useRoomGame(roomId: string): UseRoomGameReturn {
     } finally {
       setSoloStarting(false);
     }
-  };
+  }, [soloStarting, joined, handleStart, nickname, playerId, roomId, t]);
 
-  const handlePlayAgain = async () => {
+  const handlePlayAgain = useCallback(async () => {
     if (isReplaying) return;
     setIsReplaying(true);
     try {
@@ -631,9 +631,9 @@ export function useRoomGame(roomId: string): UseRoomGameReturn {
     } finally {
       setIsReplaying(false);
     }
-  };
+  }, [isReplaying, room?.mode, roomId, fetchQuestion, clearFeedbackTimer, t]);
 
-  const handleToggleReady = () => {
+  const handleToggleReady = useCallback(() => {
     const newReady = !isReady;
     setIsReady(newReady);
     setReadyPlayers((prev) => {
@@ -650,33 +650,9 @@ export function useRoomGame(roomId: string): UseRoomGameReturn {
       playerId: playerIdRef.current,
       ready: newReady,
     });
-  };
+  }, [isReady, roomId]);
 
-  const submitAnswer = (choices: number[]) => {
-    if (!socketRef.current || hasAnswered) return;
-    setHasAnswered(true);
-
-    setRoom((prev) =>
-      prev
-        ? {
-            ...prev,
-            players: prev.players.map((p) =>
-              p.id === playerIdRef.current ? { ...p, answered: true } : p,
-            ),
-          }
-        : prev,
-    );
-    const dbChoices = choices.map((i) => choiceOrder[i] ?? i);
-    socketRef.current.emit("answer", {
-      roomId,
-      playerId: playerIdRef.current,
-      questionId: questionIdRef.current,
-      selectedChoices: dbChoices,
-      clientTimestamp: Date.now(),
-    });
-  };
-
-  const handleChoice = (idx: number) => {
+  const handleChoice = useCallback((idx: number) => {
     if (hasAnswered) return;
     setSelectedChoices((prev) => {
       const toggle = (xs: number[]) =>
@@ -686,27 +662,27 @@ export function useRoomGame(roomId: string): UseRoomGameReturn {
       }
       return toggle(prev);
     });
-  };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasAnswered, choiceCorrect]);
 
-  const handleAnswerSubmit = () => {
+  const handleAnswerSubmit = useCallback(() => {
     submitAnswer(selectedChoices);
     if (room?.mode === "solo") {
       setPhase("feedback");
       clearTimer();
     }
-  };
+  }, [submitAnswer, selectedChoices, room?.mode, clearTimer]);
 
-  const getChoiceStyle = (
-    idx: number,
-    selected: number[],
-    correct: boolean[],
-  ): string => {
-    if (correct[idx])
-      return "bg-emerald-100 dark:bg-emerald-900/40 border-emerald-500 text-emerald-900 dark:text-emerald-100";
-    if (selected.includes(idx))
-      return "bg-rose-100 dark:bg-rose-900/40 border-rose-500 text-rose-900 dark:text-rose-100";
-    return "bg-white dark:bg-gray-800 border-rose-200 dark:border-gray-700 text-gray-500 dark:text-gray-400";
-  };
+  const getChoiceStyle = useCallback(
+    (idx: number, selected: number[], correct: boolean[]): string => {
+      if (correct[idx])
+        return "bg-emerald-100 dark:bg-emerald-900/40 border-emerald-500 text-emerald-900 dark:text-emerald-100";
+      if (selected.includes(idx))
+        return "bg-rose-100 dark:bg-rose-900/40 border-rose-500 text-rose-900 dark:text-rose-100";
+      return "bg-white dark:bg-gray-800 border-rose-200 dark:border-gray-700 text-gray-500 dark:text-gray-400";
+    },
+    [],
+  );
 
   /* ── computed values ───────────────────────────────────────────── */
   const answeredCount =
@@ -715,80 +691,17 @@ export function useRoomGame(roomId: string): UseRoomGameReturn {
     room?.players.filter((p) => !p.disconnected).length ?? 0;
   const isFeedback = phase === "feedback";
 
-  const christineMessage = useMemo(() => {
-    if (phase === "pre-game") {
-      return room?.mode === "solo"
-        ? t("christine.pre.solo")
-        : t("christine.pre.welcome");
-    }
-    if (phase === "game") {
-      if (questionDifficulty === "HARD")
-        return t("christine.question.hard", { index: questionIndex + 1 });
-      if (questionDifficulty === "EASY")
-        return t("christine.question.easy", { index: questionIndex + 1 });
-      return t("christine.question.default", { index: questionIndex + 1 });
-    }
-    if (phase === "feedback") {
-      if (timerExpired) return t("christine.feedback.timeout");
-      if (feedbackMeta.correct) {
-        if (feedbackMeta.onlyCorrect)
-          return t("christine.feedback.only_correct");
-        if (feedbackMeta.firstCorrect)
-          return t("christine.feedback.first_correct");
-        if (feedbackMeta.difficulty === "HARD")
-          return t("christine.feedback.correct_hard");
-        return t("christine.feedback.correct");
-      }
-      if (feedbackMeta.onlyWrong)
-        return t("christine.feedback.only_wrong");
-      return t("christine.feedback.wrong");
-    }
-    if (phase === "end") {
-      const own = scoreboard.find(
-        (s) => s.player_id === playerIdRef.current,
-      );
-      if (!own) return t("christine.end.default");
-      if (
-        room?.mode !== "solo" &&
-        scoreboard.length > 0 &&
-        scoreboard.every((s) => s.score === 0)
-      )
-        return t("room.easter_egg");
-      if (scoreboard[0]?.player_id === playerIdRef.current)
-        return t("christine.end.winner", { score: own.score });
-      if (own.score === 0) return t("christine.end.low");
-      return t("christine.end.default", { score: own.score });
-    }
-    return "";
-  }, [
+  /* ── christine hook ────────────────────────────────────────────── */
+  const { christineMessage, christineExpression } = useChristineMessages({
     phase,
-    room?.mode,
+    roomMode: room?.mode,
     questionIndex,
     questionDifficulty,
     feedbackMeta,
     timerExpired,
     scoreboard,
-    t,
-  ]);
-
-  const christineExpression = useMemo(() => {
-    if (phase === "end") {
-      const own = scoreboard.find(
-        (s) => s.player_id === playerIdRef.current,
-      );
-      if (own && scoreboard[0]?.player_id === playerIdRef.current)
-        return "applause";
-      if (own && own.score === 0) return "console";
-      return "smile";
-    }
-    if (phase === "feedback") {
-      if (timerExpired) return "console";
-      if (feedbackMeta.correct) return "applause";
-      return "console";
-    }
-    if (phase === "game") return "focused";
-    return "smile";
-  }, [phase, feedbackMeta, timerExpired, scoreboard]);
+    playerId,
+  });
 
   /* ── return ────────────────────────────────────────────────────── */
   return {

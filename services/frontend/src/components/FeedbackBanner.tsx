@@ -17,7 +17,6 @@ export default function FeedbackBanner({
   points,
   bonus,
   streak,
-  countdown,
   onlyCorrect = false,
   firstCorrect = false,
   onlyWrong = false,
