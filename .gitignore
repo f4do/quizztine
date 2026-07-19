@@ -9,3 +9,4 @@ uploads/
 prisma/generated/
 *.tsbuildinfo
 *.egg-info/
+session-*.md
