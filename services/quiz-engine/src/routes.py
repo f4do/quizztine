@@ -73,9 +73,14 @@ async def get_room(room_id: str) -> dict[str, Any]:
 async def create_room(body: CreateRoomRequest) -> CreateRoomResponse:
     room_id = body.id or str(uuid.uuid4())
 
-    room = await store.create(room_id, body.questions, body.mode, body.timer, code=body.code or "")
-    if body.creator_player_id:
-        room.creator_player_id = body.creator_player_id
+    room = await store.create(
+        room_id,
+        body.questions,
+        body.mode,
+        body.timer,
+        code=body.code or "",
+        creator_player_id=body.creator_player_id or "",
+    )
 
     logger.info(
         "room_created",
@@ -107,17 +112,22 @@ async def remove_player(
         raise engine_error(404, "PLAYER_NOT_FOUND", f"Player {player_id} not in room")
 
     if room.status == GameStatus.waiting:
-        del room.players[player_id]
+        updated = await store.update_room(
+            room_id, lambda r: r.players.pop(player_id, None)
+        )
         logger.info("player_removed", extra={"room_id": room_id, "player_id": player_id})
-        if room.player_count == 0:
+        if updated is not None and updated.player_count == 0:
             if not room.creator_player_id or player_id == room.creator_player_id:
                 await store.remove(room_id)
                 logger.info("room_deleted_empty", extra={"room_id": room_id})
     else:
-        room.players[player_id].disconnected = True
+        updated = await store.update_room(
+            room_id, lambda r: r.players[player_id].__setattr__("disconnected", True)
+        )
         logger.info("player_disconnected", extra={"room_id": room_id, "player_id": player_id})
         # A disconnected player should not block the round.
-        await flow.on_remove_player(room, room_id, background_tasks)
+        # Use the updated room copy so that on_remove_player sees the disconnect
+        await flow.on_remove_player(updated or room, room_id, background_tasks)
 
     return {"status": "removed"}
 
@@ -135,7 +145,12 @@ async def join_room(room_id: str, body: JoinRequest) -> JoinResponse:
     existing_nick = next((p for p in room.players.values() if p.nickname == body.nickname), None)
     if existing_nick and existing_nick.player_id != body.player_id:
         if room.status == GameStatus.playing and existing_nick.disconnected:
-            existing_nick.disconnected = False
+            await store.update_room(
+                room_id,
+                lambda r: r.players[existing_nick.player_id].__setattr__(
+                    "disconnected", False
+                ),
+            )
             logger.info(
                 "player_reconnected_by_nick",
                 extra={"room_id": room_id, "nickname": body.nickname},
@@ -150,7 +165,10 @@ async def join_room(room_id: str, body: JoinRequest) -> JoinResponse:
     if body.player_id in room.players:
         if room.status == GameStatus.finished:
             raise engine_error(400, "ROOM_NOT_JOINABLE", "Game already finished")
-        room.players[body.player_id].disconnected = False
+        await store.update_room(
+            room_id,
+            lambda r: r.players[body.player_id].__setattr__("disconnected", False),
+        )
         logger.info(
             "player_reconnected",
             extra={"room_id": room_id, "player_id": body.player_id},
@@ -190,22 +208,25 @@ async def start_room(room_id: str, player_id: str = "") -> dict[str, str]:
     if room.mode != RoomMode.solo and room.player_count < 2:
         raise engine_error(400, "NOT_ENOUGH_PLAYERS", "Multiplayer rooms need at least 2 players")
 
-    room.shuffle_questions()
-    room.status = GameStatus.playing
-    room.start_time = time.time()
-    room.current_question_index = 0
-    room.answered_players.clear()
-    room.current_round_answers.clear()
-    room.feedback_until = None
+    def _init_game(r) -> None:
+        r.shuffle_questions()
+        r.status = GameStatus.playing
+        now = time.time()
+        r.start_time = now
+        r.current_question_index = 0
+        r.answered_players.clear()
+        r.current_round_answers.clear()
+        r.feedback_until = None
+        r.question_started_at = now
+        r.question_deadline = now + r.timer
+        for player in r.players.values():
+            player.question_started_at = now
+            player.current_question_index = 0
+        r.advance_task = asyncio.create_task(
+            flow._deadline_task(room_id, r.question_deadline)
+        )
 
-    now = time.time()
-    room.question_started_at = now
-    room.question_deadline = now + room.timer
-    for player in room.players.values():
-        player.question_started_at = now
-        player.current_question_index = 0
-
-    room.advance_task = asyncio.create_task(flow._deadline_task(room_id, room.question_deadline))
+    await store.update_room(room_id, _init_game)
 
     logger.info("room_started", extra={"room_id": room_id, "players": room.player_count})
 
@@ -272,13 +293,15 @@ async def submit_answer(
                 cumulative_time=player.cumulative_time,
             )
         # Cas rare : le joueur n'a pas encore été enregistré
-        room.answered_players.add(player_id)
-        room.current_round_answers[player_id] = RoundAnswer(
-            player_id=player_id,
-            selected_choices=body.selected_choices,
-            elapsed=room.timer,
-            timeout=True,
-        )
+        def _register_late_answer(r) -> None:
+            r.answered_players.add(player_id)
+            r.current_round_answers[player_id] = RoundAnswer(
+                player_id=player_id,
+                selected_choices=body.selected_choices,
+                elapsed=r.timer,
+                timeout=True,
+            )
+        await store.update_room(room_id, _register_late_answer)
         return AnswerResponse(
             correct=False,
             points=0,
@@ -303,13 +326,15 @@ async def submit_answer(
     elapsed = time.time() - room.question_started_at
     timeout = elapsed > room.timer
 
-    room.answered_players.add(player_id)
-    room.current_round_answers[player_id] = RoundAnswer(
-        player_id=player_id,
-        selected_choices=body.selected_choices,
-        elapsed=elapsed,
-        timeout=timeout,
-    )
+    def _register_answer(r) -> None:
+        r.answered_players.add(player_id)
+        r.current_round_answers[player_id] = RoundAnswer(
+            player_id=player_id,
+            selected_choices=body.selected_choices,
+            elapsed=elapsed,
+            timeout=timeout,
+        )
+    updated = await store.update_room(room_id, _register_answer)
 
     # Provisional scoring for the HTTP response. Final scoring (with multi
     # bonuses) happens once the whole round has finished.
@@ -349,8 +374,9 @@ async def submit_answer(
         },
     )
 
-    if room.all_active_answered():
-        await flow.on_answer(room, room_id, player_id, background_tasks)
+    # Use the updated room copy to check if all active players have answered
+    if updated is not None and updated.all_active_answered():
+        await flow.on_answer(updated, room_id, player_id, background_tasks)
 
     response_time = min(elapsed, room.timer) if not timeout else room.timer
     return AnswerResponse(

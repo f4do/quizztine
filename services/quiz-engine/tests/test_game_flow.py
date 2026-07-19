@@ -153,10 +153,10 @@ class TestSoloTimeout:
 
         # Manually simulate: deadline_task finished the round already
         # Set feedback_until (as if finish_round already ran) and mark player as answered
-        r = await store.get(rid)
-        assert r is not None
-        r.feedback_until = time.time() + 5.0
-        r.answered_players.add("p1")
+        await store.update_room(rid, lambda r: (
+            setattr(r, "feedback_until", time.time() + 5.0),
+            r.answered_players.add("p1"),
+        ))
 
         # Now submit a late answer → should get 200 with timeout result (not 400)
         q = client.get(f"/rooms/{rid}/current-question/p1").json()
@@ -472,3 +472,146 @@ class TestSoloBackendCallbacks:
 
         paths_q2 = [c[0] for c in calls]
         assert "game-finished" in paths_q2, f"Expected game-finished in {paths_q2}"
+
+
+class TestCleanupExpired:
+    """Room store cleanup of expired/finished rooms."""
+
+    async def test_cleanup_removes_old_finished_room(self, client):
+        """A finished room older than max_age is removed."""
+        import src.room_store as room_store_m
+
+        payload = {
+            "questions": [{"id": 1, "correct_choices": [0]}],
+            "mode": "solo",
+            "timer": 30,
+        }
+        room = client.post("/rooms", json=payload).json()
+        rid = room["id"]
+
+        client.post(f"/rooms/{rid}/join", json={"player_id": "p1", "nickname": "Alice"})
+        client.post(f"/rooms/{rid}/start")
+
+        q = client.get(f"/rooms/{rid}/current-question/p1").json()
+        client.post(f"/rooms/{rid}/answer/p1", json={
+            "question_id": q["question_id"], "selected_choices": [0],
+            "client_timestamp": time.time(),
+        })
+
+        # Wait briefly for the game to finish (feedback_delay=0 in test)
+        await asyncio.sleep(0.05)
+
+        # Verify room is finished
+        room_state = client.get(f"/rooms/{rid}").json()
+        assert room_state["status"] == "finished"
+
+        # Manually set created_at far in the past (but > 0 to pass the filter)
+        async with room_store_m.store._lock:
+            raw = room_store_m.store._rooms.get(rid)
+            assert raw is not None
+            raw.created_at = 1.0  # 1970-01-01, very old
+
+        # Cleanup with max_age=0 should remove it
+        removed = await room_store_m.store.cleanup_expired(max_age_seconds=0)
+        assert removed == 1
+
+        # Room should no longer exist
+        resp = client.get(f"/rooms/{rid}")
+        assert resp.status_code == 404
+
+    async def test_cleanup_preserves_recent_finished_room(self, client):
+        """A recently finished room is not removed."""
+        import src.room_store as room_store_m
+
+        payload = {
+            "questions": [{"id": 1, "correct_choices": [0]}],
+            "mode": "solo",
+            "timer": 30,
+        }
+        room = client.post("/rooms", json=payload).json()
+        rid = room["id"]
+
+        client.post(f"/rooms/{rid}/join", json={"player_id": "p1", "nickname": "Alice"})
+        client.post(f"/rooms/{rid}/start")
+
+        q = client.get(f"/rooms/{rid}/current-question/p1").json()
+        client.post(f"/rooms/{rid}/answer/p1", json={
+            "question_id": q["question_id"], "selected_choices": [0],
+            "client_timestamp": time.time(),
+        })
+
+        await asyncio.sleep(0.05)
+
+        room_state = client.get(f"/rooms/{rid}").json()
+        assert room_state["status"] == "finished"
+
+        # Cleanup with max_age very large should NOT remove it
+        removed = await room_store_m.store.cleanup_expired(max_age_seconds=999999)
+        assert removed == 0
+
+        # Room should still exist
+        resp = client.get(f"/rooms/{rid}")
+        assert resp.status_code == 200
+
+    async def test_cleanup_ignores_active_rooms(self, client, monkeypatch):
+        """Active (playing) rooms are not removed by cleanup."""
+        import src.room_store as room_store_m
+
+        monkeypatch.setattr("src.game_flow.notify_backend", lambda *a, **kw: None)
+
+        payload = {
+            "questions": [{"id": 1, "correct_choices": [0]}],
+            "mode": "solo",
+            "timer": 30,
+        }
+        room = client.post("/rooms", json=payload).json()
+        rid = room["id"]
+
+        client.post(f"/rooms/{rid}/join", json={"player_id": "p1", "nickname": "Alice"})
+        client.post(f"/rooms/{rid}/start")
+
+        # Room is now playing
+        # Manually set created_at to 0 (old)
+        async with room_store_m.store._lock:
+            raw = room_store_m.store._rooms.get(rid)
+            assert raw is not None
+            raw.created_at = 0.0
+
+        # Cleanup should NOT remove it (status is playing, not finished)
+        removed = await room_store_m.store.cleanup_expired(max_age_seconds=0)
+        assert removed == 0
+
+        # Room should still exist
+        resp = client.get(f"/rooms/{rid}")
+        assert resp.status_code == 200
+
+    async def test_cleanup_on_shutdown_cancels_tasks(self, client, monkeypatch):
+        """Shutdown cleanup cancels advance_task for active rooms."""
+        import src.room_store as room_store_m
+        import src.game_flow as game_flow_m
+
+        monkeypatch.setattr(game_flow_m, "notify_backend", lambda *a, **kw: None)
+
+        payload = {
+            "questions": [{"id": 1, "correct_choices": [0]}],
+            "mode": "solo",
+            "timer": 30,
+        }
+        room = client.post("/rooms", json=payload).json()
+        rid = room["id"]
+
+        client.post(f"/rooms/{rid}/join", json={"player_id": "p1", "nickname": "Alice"})
+        client.post(f"/rooms/{rid}/start")
+
+        # Room is playing with an advance_task
+        raw = await room_store_m.store._get_raw(rid)
+        assert raw is not None
+        assert raw.advance_task is not None
+
+        active_ids = await room_store_m.store.cleanup_on_shutdown()
+        assert rid in active_ids
+
+        # advance_task should be None after cleanup
+        raw2 = await room_store_m.store._get_raw(rid)
+        assert raw2 is not None
+        assert raw2.advance_task is None

@@ -46,7 +46,7 @@ class GameFlow(ABC):
             await self.finish_round(room_id, background_tasks)
 
     async def finish_round(self, room_id: str, background_tasks=None) -> None:
-        room = await store.get(room_id)
+        room = await store._get_raw(room_id)
         if room is None or room.status != GameStatus.playing:
             return
         if room.feedback_until is not None:
@@ -190,7 +190,7 @@ class GameFlow(ABC):
         await self.advance_question(room_id)
 
     async def advance_question(self, room_id: str) -> None:
-        room = await store.get(room_id)
+        room = await store._get_raw(room_id)
         if room is None or room.status != GameStatus.playing:
             return
 
@@ -237,7 +237,7 @@ class GameFlow(ABC):
         sleep_seconds = deadline - time.time()
         if sleep_seconds > 0:
             await asyncio.sleep(sleep_seconds)
-        room = await store.get(room_id)
+        room = await store._get_raw(room_id)
         if room is None or room.status != GameStatus.playing:
             return
         if room.feedback_until is not None:
@@ -245,7 +245,7 @@ class GameFlow(ABC):
         await self.finish_round(room_id)
 
     async def _send_results(self, room_id: str, max_retries: int = 3) -> None:
-        room = await store.get(room_id)
+        room = await store._get_raw(room_id)
         if room is None:
             return
 
