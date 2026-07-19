@@ -3,11 +3,13 @@ import { useTranslation } from "react-i18next";
 import { useAuth } from "../lib/auth";
 import LanguageSwitcher from "./LanguageSwitcher";
 import ThemeSwitcher from "./ThemeSwitcher";
-import ChristineAvatar from "./christine/ChristineAvatar";
+import HostAvatar from "./host/HostAvatar";
+import { useHost } from "../lib/HostProvider";
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   const { t } = useTranslation();
   const { user, logout, loading } = useAuth();
+  const { host } = useHost();
   const navigate = useNavigate();
   const location = useLocation();
   const isHome = location.pathname === "/";
@@ -18,7 +20,13 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         <div className="max-w-6xl mx-auto flex items-center justify-between">
           <Link to="/" className="flex items-center gap-2 group">
             <div className="relative">
-              <ChristineAvatar expression="smile" size="sm" />
+              <HostAvatar
+                expression="smile"
+                size="sm"
+                avatarType={host.avatarType}
+                avatarConfig={host.avatarConfig}
+                avatarUrl={host.avatarUrl}
+              />
             </div>
             <div className="flex flex-col leading-none">
               <span className="font-display text-2xl tracking-wide text-tv-red dark:text-tv-gold uppercase group-hover:scale-105 transition-transform origin-left">

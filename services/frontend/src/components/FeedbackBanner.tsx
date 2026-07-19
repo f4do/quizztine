@@ -47,12 +47,12 @@ export default function FeedbackBanner({
             <p className="text-xs font-semibold opacity-90">
               {isCorrect
                 ? onlyCorrect
-                  ? t("christine.feedback.only_correct")
+                  ? t("host.feedback.only_correct")
                   : firstCorrect
-                    ? t("christine.feedback.first_correct")
+                    ? t("host.feedback.first_correct")
                     : `${t("room.points")}${points}`
                 : onlyWrong
-                  ? t("christine.feedback.only_wrong")
+                  ? t("host.feedback.only_wrong")
                   : `${t("room.points")}${points}`}
             </p>
           </div>

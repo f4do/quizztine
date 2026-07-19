@@ -4,7 +4,7 @@ import { useTranslation } from "react-i18next";
 import { useAuth } from "../lib/auth";
 import { api } from "../lib/api";
 import Layout from "../components/Layout";
-import { ChristinePresenter } from "../components/christine";
+import { AppHostPresenter } from "../components/host";
 import Card from "../components/ui/Card";
 
 export default function TrainPage() {
@@ -144,8 +144,8 @@ export default function TrainPage() {
         </Card>
       </div>
 
-      <ChristinePresenter
-        message={t("christine.train.prompt")}
+      <AppHostPresenter
+        message={t("host.train.prompt")}
         expression="focused"
         position="bottom-right"
         avatarSize="md"

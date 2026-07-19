@@ -1,9 +1,9 @@
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import type { Phase, FeedbackMeta, ScoreboardEntry } from "./useRoomGameTypes";
-import type { ChristineExpression } from "../components/christine/ChristinePresenter";
+import type { HostExpression } from "../components/host/HostPresenter";
 
-export interface UseChristineMessagesInput {
+export interface UseHostMessagesInput {
   phase: Phase;
   roomMode: string | undefined;
   questionIndex: number;
@@ -14,12 +14,12 @@ export interface UseChristineMessagesInput {
   playerId: string;
 }
 
-export interface UseChristineMessagesReturn {
-  christineMessage: string;
-  christineExpression: ChristineExpression;
+export interface UseHostMessagesReturn {
+  hostMessage: string;
+  hostExpression: HostExpression;
 }
 
-export function useChristineMessages({
+export function useHostMessages({
   phase,
   roomMode,
   questionIndex,
@@ -28,42 +28,42 @@ export function useChristineMessages({
   timerExpired,
   scoreboard,
   playerId,
-}: UseChristineMessagesInput): UseChristineMessagesReturn {
+}: UseHostMessagesInput): UseHostMessagesReturn {
   const { t } = useTranslation();
 
-  const christineMessage = useMemo(() => {
+  const hostMessage = useMemo(() => {
     if (phase === "pre-game") {
       return roomMode === "solo"
-        ? t("christine.pre.solo")
-        : t("christine.pre.welcome");
+        ? t("host.pre.solo")
+        : t("host.pre.welcome");
     }
     if (phase === "game") {
       if (questionDifficulty === "HARD")
-        return t("christine.question.hard", { index: questionIndex + 1 });
+        return t("host.question.hard", { index: questionIndex + 1 });
       if (questionDifficulty === "EASY")
-        return t("christine.question.easy", { index: questionIndex + 1 });
-      return t("christine.question.default", { index: questionIndex + 1 });
+        return t("host.question.easy", { index: questionIndex + 1 });
+      return t("host.question.default", { index: questionIndex + 1 });
     }
     if (phase === "feedback") {
-      if (timerExpired) return t("christine.feedback.timeout");
+      if (timerExpired) return t("host.feedback.timeout");
       if (feedbackMeta.correct) {
         if (feedbackMeta.onlyCorrect)
-          return t("christine.feedback.only_correct");
+          return t("host.feedback.only_correct");
         if (feedbackMeta.firstCorrect)
-          return t("christine.feedback.first_correct");
+          return t("host.feedback.first_correct");
         if (feedbackMeta.difficulty === "HARD")
-          return t("christine.feedback.correct_hard");
-        return t("christine.feedback.correct");
+          return t("host.feedback.correct_hard");
+        return t("host.feedback.correct");
       }
       if (feedbackMeta.onlyWrong)
-        return t("christine.feedback.only_wrong");
-      return t("christine.feedback.wrong");
+        return t("host.feedback.only_wrong");
+      return t("host.feedback.wrong");
     }
     if (phase === "end") {
       const own = scoreboard.find(
         (s) => s.player_id === playerId,
       );
-      if (!own) return t("christine.end.default");
+      if (!own) return t("host.end.default");
       if (
         roomMode !== "solo" &&
         scoreboard.length > 0 &&
@@ -71,9 +71,9 @@ export function useChristineMessages({
       )
         return t("room.easter_egg");
       if (scoreboard[0]?.player_id === playerId)
-        return t("christine.end.winner", { score: own.score });
-      if (own.score === 0) return t("christine.end.low");
-      return t("christine.end.default", { score: own.score });
+        return t("host.end.winner", { score: own.score });
+      if (own.score === 0) return t("host.end.low");
+      return t("host.end.default", { score: own.score });
     }
     return "";
   }, [
@@ -88,7 +88,7 @@ export function useChristineMessages({
     t,
   ]);
 
-  const christineExpression = useMemo(() => {
+  const hostExpression = useMemo(() => {
     if (phase === "end") {
       const own = scoreboard.find(
         (s) => s.player_id === playerId,
@@ -107,5 +107,5 @@ export function useChristineMessages({
     return "smile";
   }, [phase, feedbackMeta, timerExpired, scoreboard, playerId]);
 
-  return { christineMessage, christineExpression };
+  return { hostMessage, hostExpression };
 }

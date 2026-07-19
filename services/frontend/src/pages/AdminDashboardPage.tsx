@@ -5,7 +5,7 @@ import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import Card from "../components/ui/Card";
 import Button from "../components/ui/Button";
-import { ChristinePresenter } from "../components/christine";
+import { AppHostPresenter } from "../components/host";
 
 export default function AdminDashboardPage() {
   const { t } = useTranslation();
@@ -109,8 +109,8 @@ export default function AdminDashboardPage() {
         </Link>
       </div>
 
-      <ChristinePresenter
-        message={t("christine.admin.dashboard")}
+      <AppHostPresenter
+        message={t("host.admin.dashboard")}
         expression="smile"
         position="bottom-right"
         avatarSize="sm"

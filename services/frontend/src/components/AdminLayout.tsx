@@ -66,6 +66,11 @@ export default function AdminLayout() {
                     label={t("admin.nav.categories")}
                     icon="🏷️"
                   />
+                  <NavItem
+                    to="/admin/hosts"
+                    label={t("admin.nav.hosts")}
+                    icon="🎙️"
+                  />
                 </>
               )}
             </nav>

@@ -3,7 +3,7 @@ import { useNavigate, Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "../lib/auth";
 import Layout from "../components/Layout";
-import { ChristinePresenter } from "../components/christine";
+import { AppHostPresenter } from "../components/host";
 import Card from "../components/ui/Card";
 
 export default function RegisterPage() {
@@ -44,7 +44,7 @@ export default function RegisterPage() {
               {t("register.title")}
             </h1>
             <p className="text-sm text-gray-500 dark:text-gray-400">
-              {t("christine.register.prompt")}
+              {t("host.register.prompt")}
             </p>
           </div>
 
@@ -123,8 +123,8 @@ export default function RegisterPage() {
         </Card>
       </div>
 
-      <ChristinePresenter
-        message={t("christine.register.welcome")}
+      <AppHostPresenter
+        message={t("host.register.welcome")}
         expression="smile"
         position="bottom-right"
         avatarSize="md"

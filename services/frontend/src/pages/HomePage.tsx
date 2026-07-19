@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { api } from "../lib/api";
 import Layout from "../components/Layout";
-import { ChristinePresenter } from "../components/christine";
+import { AppHostPresenter } from "../components/host";
 
 export default function HomePage() {
   const { t } = useTranslation();
@@ -99,8 +99,8 @@ export default function HomePage() {
         </div>
       </div>
 
-      <ChristinePresenter
-        message={t("christine.home.welcome")}
+      <AppHostPresenter
+        message={t("host.home.welcome")}
         expression="smile"
         position="bottom-right"
         avatarSize="lg"

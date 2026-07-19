@@ -4,7 +4,7 @@ import { useTranslation } from "react-i18next";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import Layout from "../components/Layout";
-import { ChristinePresenter } from "../components/christine";
+import { AppHostPresenter } from "../components/host";
 import Card from "../components/ui/Card";
 
 type Mode = "solo" | "multi_private" | "multi_public";
@@ -12,10 +12,25 @@ type Mode = "solo" | "multi_private" | "multi_public";
 const COUNT_OPTIONS = [10, 20, 50];
 
 type GameMode = "classic" | "speed" | "elimination";
-const GAME_MODES: { value: GameMode; key: string; descKey: string; available: boolean }[] = [
-  { value: "classic", key: "classic", descKey: "classic_desc", available: true },
+const GAME_MODES: {
+  value: GameMode;
+  key: string;
+  descKey: string;
+  available: boolean;
+}[] = [
+  {
+    value: "classic",
+    key: "classic",
+    descKey: "classic_desc",
+    available: true,
+  },
   { value: "speed", key: "speed", descKey: "speed_desc", available: false },
-  { value: "elimination", key: "elimination", descKey: "elimination_desc", available: false },
+  {
+    value: "elimination",
+    key: "elimination",
+    descKey: "elimination_desc",
+    available: false,
+  },
 ];
 
 export default function RoomCreatePage() {
@@ -44,7 +59,12 @@ export default function RoomCreatePage() {
     );
   };
 
-  const MODES: { value: Mode; label: string; icon: string; disabled?: boolean }[] = [
+  const MODES: {
+    value: Mode;
+    label: string;
+    icon: string;
+    disabled?: boolean;
+  }[] = [
     { value: "solo", label: t("room_create.solo"), icon: "🎓" },
     {
       value: "multi_private",
@@ -125,7 +145,7 @@ export default function RoomCreatePage() {
             {t("room_create.title")}
           </h1>
           <p className="text-sm text-gray-500 dark:text-gray-400">
-            {t("christine.room_create.prompt")}
+            {t("host.room_create.prompt")}
           </p>
         </div>
 
@@ -148,7 +168,9 @@ export default function RoomCreatePage() {
                     type="button"
                     disabled={m.disabled}
                     onClick={() => !m.disabled && setMode(m.value)}
-                    title={m.disabled ? t("room_create.coming_soon") : undefined}
+                    title={
+                      m.disabled ? t("room_create.coming_soon") : undefined
+                    }
                     className={`flex flex-col items-center gap-1 px-2 py-3 rounded-xl text-sm font-bold border-2 transition-all ${
                       mode === m.value && !m.disabled
                         ? "bg-tv-red text-white border-tv-red shadow-md"
@@ -179,7 +201,11 @@ export default function RoomCreatePage() {
                     key={gm.value}
                     type="button"
                     disabled={!gm.available}
-                    title={gm.available ? t(`room_create.${gm.descKey}`) : `${t(`room_create.${gm.descKey}`)} — ${t("room_create.coming_soon")}`}
+                    title={
+                      gm.available
+                        ? t(`room_create.${gm.descKey}`)
+                        : `${t(`room_create.${gm.descKey}`)} — ${t("room_create.coming_soon")}`
+                    }
                     onClick={() => gm.available && setGameMode(gm.value)}
                     className={`px-4 py-2 rounded-xl text-sm font-bold border-2 transition-all ${
                       gm.available && gameMode === gm.value
@@ -349,8 +375,8 @@ export default function RoomCreatePage() {
         </Card>
       </div>
 
-      <ChristinePresenter
-        message={t("christine.room_create.welcome")}
+      <AppHostPresenter
+        message={t("host.room_create.welcome")}
         expression="focused"
         position="bottom-right"
         avatarSize="md"

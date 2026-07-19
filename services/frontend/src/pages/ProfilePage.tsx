@@ -6,7 +6,7 @@ import { useAuth } from "../lib/auth";
 import Layout from "../components/Layout";
 import LanguageSwitcher from "../components/LanguageSwitcher";
 import ThemeSwitcher from "../components/ThemeSwitcher";
-import { ChristinePresenter } from "../components/christine";
+import { AppHostPresenter } from "../components/host";
 import Card from "../components/ui/Card";
 
 interface ProfileData {
@@ -446,8 +446,8 @@ export default function ProfilePage() {
         </Card>
       </div>
 
-      <ChristinePresenter
-        message={t("christine.profile.prompt", { pseudo: user?.pseudo || "" })}
+      <AppHostPresenter
+        message={t("host.profile.prompt", { pseudo: user?.pseudo || "" })}
         expression="smile"
         position="bottom-right"
         avatarSize="md"

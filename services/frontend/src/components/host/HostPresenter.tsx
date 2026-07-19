@@ -1,24 +1,31 @@
 import { useEffect, useState } from "react";
-import ChristineAvatar from "./ChristineAvatar";
-import ChristineBubble from "./ChristineBubble";
+import HostAvatar from "./HostAvatar";
+import HostBubble, { type HostVariant } from "./HostBubble";
+import type { AvatarConfig, HostExpression } from "./AvatarRenderer";
 
-export type ChristineExpression =
-  "smile" | "focused" | "surprised" | "applause" | "console";
-export type ChristineVariant = "default" | "success" | "error" | "warning";
+export type { HostExpression, AvatarConfig };
+export type { HostVariant };
 
-interface ChristinePresenterProps {
+export interface HostConfigProps {
+  hostName?: string;
+  hostAvatarType?: "BUILTIN" | "UPLOAD" | "URL";
+  hostAvatarConfig?: AvatarConfig;
+  hostAvatarUrl?: string | null;
+}
+
+export type HostPresenterProps = {
   message: string;
-  expression?: ChristineExpression;
-  variant?: ChristineVariant;
+  expression?: HostExpression;
+  variant?: HostVariant;
   className?: string;
   position?: "bottom-right" | "bottom-left" | "inline";
   avatarSize?: "sm" | "md" | "lg";
   typing?: boolean;
   autoHide?: number;
   onHide?: () => void;
-}
+} & HostConfigProps;
 
-export default function ChristinePresenter({
+export default function HostPresenter({
   message,
   expression = "smile",
   variant = "default",
@@ -28,7 +35,11 @@ export default function ChristinePresenter({
   typing = true,
   autoHide,
   onHide,
-}: ChristinePresenterProps) {
+  hostName,
+  hostAvatarType,
+  hostAvatarConfig,
+  hostAvatarUrl,
+}: HostPresenterProps) {
   const [visible, setVisible] = useState(true);
 
   useEffect(() => {
@@ -54,14 +65,21 @@ export default function ChristinePresenter({
       className={`${positionClasses[position]} ${className} animate-slide-in-right`}
     >
       <div className="flex flex-col items-end">
-        <ChristineBubble
-          text={message}
+        <HostBubble
+          message={message}
           variant={variant}
           typing={typing}
+          name={hostName}
           className="shadow-2xl"
         />
       </div>
-      <ChristineAvatar expression={expression} size={avatarSize} />
+      <HostAvatar
+        expression={expression}
+        size={avatarSize}
+        avatarType={hostAvatarType}
+        avatarConfig={hostAvatarConfig}
+        avatarUrl={hostAvatarUrl}
+      />
     </div>
   );
 }

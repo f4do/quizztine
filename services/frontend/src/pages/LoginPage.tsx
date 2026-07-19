@@ -3,7 +3,7 @@ import { useNavigate, Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "../lib/auth";
 import Layout from "../components/Layout";
-import { ChristinePresenter } from "../components/christine";
+import { AppHostPresenter } from "../components/host";
 import Card from "../components/ui/Card";
 
 export default function LoginPage() {
@@ -34,7 +34,7 @@ export default function LoginPage() {
               {t("login.title")}
             </h1>
             <p className="text-sm text-gray-500 dark:text-gray-400">
-              {t("christine.login.prompt")}
+              {t("host.login.prompt")}
             </p>
           </div>
 
@@ -87,8 +87,8 @@ export default function LoginPage() {
         </Card>
       </div>
 
-      <ChristinePresenter
-        message={t("christine.login.welcome")}
+      <AppHostPresenter
+        message={t("host.login.welcome")}
         expression="focused"
         position="bottom-right"
         avatarSize="md"

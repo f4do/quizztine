@@ -15,8 +15,8 @@ import {
   seededShuffle,
 } from "./useRoomGameTypes";
 import { useGameTimer } from "./useGameTimer";
-import { useChristineMessages } from "./useChristineMessages";
-import type { ChristineExpression } from "../components/christine/ChristinePresenter";
+import { useHostMessages } from "./useHostMessages";
+import type { HostExpression } from "../components/host/HostPresenter";
 
 /* ── Hook return type ──────────────────────────────────────────────── */
 export interface UseRoomGameReturn {
@@ -51,8 +51,8 @@ export interface UseRoomGameReturn {
   hasAnswered: boolean;
   feedbackCountdown: number;
   feedbackMeta: FeedbackMeta;
-  christineMessage: string;
-  christineExpression: ChristineExpression;
+  hostMessage: string;
+  hostExpression: HostExpression;
   answeredCount: number;
   totalActive: number;
   isFeedback: boolean;
@@ -696,8 +696,8 @@ export function useRoomGame(roomId: string): UseRoomGameReturn {
     room?.players.filter((p) => !p.disconnected).length ?? 0;
   const isFeedback = phase === "feedback";
 
-  /* ── christine hook ────────────────────────────────────────────── */
-  const { christineMessage, christineExpression } = useChristineMessages({
+  /* ── host hook ─────────────────────────────────────────────────── */
+  const { hostMessage, hostExpression } = useHostMessages({
     phase,
     roomMode: room?.mode,
     questionIndex,
@@ -741,8 +741,8 @@ export function useRoomGame(roomId: string): UseRoomGameReturn {
     hasAnswered,
     feedbackCountdown,
     feedbackMeta,
-    christineMessage,
-    christineExpression,
+    hostMessage,
+    hostExpression,
     answeredCount,
     totalActive,
     isFeedback,

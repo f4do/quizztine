@@ -1,7 +1,7 @@
 import { useParams, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import Layout from "../components/Layout";
-import { ChristinePresenter } from "../components/christine";
+import { AppHostPresenter } from "../components/host";
 import Card from "../components/ui/Card";
 import { useRoomGame } from "../lib/useRoomGame";
 import RoomPreGame from "../components/room/RoomPreGame";
@@ -33,8 +33,8 @@ export default function RoomPage() {
             </button>
           </Card>
         </div>
-        <ChristinePresenter
-          message={t("christine.error.message")}
+        <AppHostPresenter
+          message={t("host.error.message")}
           expression="console"
           variant="error"
           position="bottom-right"
@@ -133,9 +133,9 @@ export default function RoomPage() {
         )}
       </div>
 
-      <ChristinePresenter
-        message={game.christineMessage}
-        expression={game.christineExpression}
+      <AppHostPresenter
+        message={game.hostMessage}
+        expression={game.hostExpression}
         variant={
           game.phase === "feedback"
             ? game.result?.correct
