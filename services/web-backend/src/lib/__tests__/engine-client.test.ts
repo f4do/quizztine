@@ -29,14 +29,14 @@ describe('EngineClient', () => {
   describe('createRoom', () => {
     it('sends correct payload with all fields', async () => {
       mockSuccessResponse({ id: 'room-1', mode: 'solo', timer: 30, question_count: 5 })
-      await engineClient.createRoom(
-        'room-1',
-        [{ id: 1, correctChoices: [0], difficulty: 'easy' }],
-        'solo',
-        30,
-        'ABC123',
-        'creator-1',
-      )
+      await engineClient.createRoom({
+        id: 'room-1',
+        questions: [{ id: 1, correct_choices: [0], difficulty: 'easy', question_type: 'MCQ' }],
+        mode: 'solo',
+        timer: 30,
+        code: 'ABC123',
+        creator_player_id: 'creator-1',
+      })
       expect(mockFetch).toHaveBeenCalledTimes(1)
       const [url, opts] = mockFetch.mock.calls[0]
       expect(url).toContain('/rooms')
@@ -48,17 +48,23 @@ describe('EngineClient', () => {
       expect(body.questions[0].id).toBe(1)
       expect(body.questions[0].correct_choices).toEqual([0])
       expect(body.questions[0].difficulty).toBe('easy')
+      expect(body.questions[0].question_type).toBe('MCQ')
       expect(body.mode).toBe('solo')
       expect(body.timer).toBe(30)
       expect(body.code).toBe('ABC123')
       expect(body.creator_player_id).toBe('creator-1')
     })
 
-    it('omits optional code and creatorPlayerId when not provided', async () => {
+    it('omits optional id/code/creator_player_id when not provided', async () => {
       mockSuccessResponse({ id: 'room-2', mode: 'multi_public', timer: 20, question_count: 10 })
-      await engineClient.createRoom('room-2', [], 'multi_public', 20)
+      await engineClient.createRoom({
+        questions: [{ id: 2, correct_choices: [], difficulty: 'medium', question_type: 'MCQ' }],
+        mode: 'multi_public',
+        timer: 20,
+      })
       const [, opts] = mockFetch.mock.calls[0]
       const body = JSON.parse(opts.body)
+      expect(body.id).toBeUndefined()
       expect(body.code).toBeUndefined()
       expect(body.creator_player_id).toBeUndefined()
     })
@@ -66,13 +72,19 @@ describe('EngineClient', () => {
     it('returns CreateRoomResponse on success', async () => {
       const expected = { id: 'room-1', mode: 'solo', timer: 30, question_count: 5 }
       mockSuccessResponse(expected)
-      const result = await engineClient.createRoom('room-1', [], 'solo', 30)
+      const result = await engineClient.createRoom({
+        questions: [],
+        mode: 'solo',
+        timer: 30,
+      })
       expect(result).toEqual(expected)
     })
 
     it('throws AppError on failure with JSON error body', async () => {
       mockErrorResponse(503, { error: 'Engine overloaded' })
-      await expect(engineClient.createRoom('room-1', [], 'solo', 30)).rejects.toThrow(AppError)
+      await expect(
+        engineClient.createRoom({ questions: [], mode: 'solo', timer: 30 }),
+      ).rejects.toThrow(AppError)
     })
 
     it('throws AppError on failure without JSON body', async () => {
@@ -81,7 +93,9 @@ describe('EngineClient', () => {
         status: 503,
         json: () => Promise.reject(new Error('No JSON')),
       })
-      await expect(engineClient.createRoom('room-1', [], 'solo', 30)).rejects.toThrow(AppError)
+      await expect(
+        engineClient.createRoom({ questions: [], mode: 'solo', timer: 30 }),
+      ).rejects.toThrow(AppError)
     })
   })
 
@@ -112,8 +126,8 @@ describe('EngineClient', () => {
 
   describe('joinRoom', () => {
     it('calls POST on the correct endpoint with player_id and nickname', async () => {
-      mockSuccessResponse(null)
-      await engineClient.joinRoom('room-1', 'player-1', 'Alice')
+      mockSuccessResponse({ room_id: 'room-1', player_id: 'player-1', nickname: 'Alice' })
+      await engineClient.joinRoom('room-1', { player_id: 'player-1', nickname: 'Alice' })
       const [url, opts] = mockFetch.mock.calls[0]
       expect(url).toContain('/rooms/room-1/join')
       expect(opts.method).toBe('POST')
@@ -125,7 +139,9 @@ describe('EngineClient', () => {
 
     it('throws AppError on failure', async () => {
       mockErrorResponse(409, { error: 'NICKNAME_TAKEN' })
-      await expect(engineClient.joinRoom('room-1', 'player-1', 'Alice')).rejects.toThrow(AppError)
+      await expect(
+        engineClient.joinRoom('room-1', { player_id: 'player-1', nickname: 'Alice' }),
+      ).rejects.toThrow(AppError)
     })
 
     it('throws AppError on failure without JSON', async () => {
@@ -134,14 +150,20 @@ describe('EngineClient', () => {
         status: 500,
         json: () => Promise.reject(new Error('No JSON')),
       })
-      await expect(engineClient.joinRoom('room-1', 'player-1', 'Alice')).rejects.toThrow(AppError)
+      await expect(
+        engineClient.joinRoom('room-1', { player_id: 'player-1', nickname: 'Alice' }),
+      ).rejects.toThrow(AppError)
     })
   })
 
   describe('submitAnswer', () => {
     it('calls POST on the correct endpoint with answer data', async () => {
       mockSuccessResponse({ correct: true, points: 10, bonus: 0, streak: 1, cumulative_time: 5.2 })
-      await engineClient.submitAnswer('room-1', 'player-1', 42, [0, 2], 1234567890)
+      await engineClient.submitAnswer('room-1', 'player-1', {
+        question_id: 42,
+        selected_choices: [0, 2],
+        client_timestamp: 1234567890,
+      })
       const [url, opts] = mockFetch.mock.calls[0]
       expect(url).toContain('/rooms/room-1/answer/player-1')
       expect(opts.method).toBe('POST')
@@ -155,14 +177,22 @@ describe('EngineClient', () => {
     it('returns AnswerResponse on success', async () => {
       const expected = { correct: true, points: 15, bonus: 5, streak: 2, cumulative_time: 8.1 }
       mockSuccessResponse(expected)
-      const result = await engineClient.submitAnswer('room-1', 'player-1', 42, [0], 1234567890)
+      const result = await engineClient.submitAnswer('room-1', 'player-1', {
+        question_id: 42,
+        selected_choices: [0],
+        client_timestamp: 1234567890,
+      })
       expect(result).toEqual(expected)
     })
 
     it('throws AppError on failure', async () => {
       mockErrorResponse(500)
       await expect(
-        engineClient.submitAnswer('room-1', 'player-1', 42, [0], 1234567890),
+        engineClient.submitAnswer('room-1', 'player-1', {
+          question_id: 42,
+          selected_choices: [0],
+          client_timestamp: 1234567890,
+        }),
       ).rejects.toThrow(AppError)
     })
 
@@ -173,7 +203,11 @@ describe('EngineClient', () => {
         json: () => Promise.reject(new Error('No JSON')),
       })
       await expect(
-        engineClient.submitAnswer('room-1', 'player-1', 42, [0], 1234567890),
+        engineClient.submitAnswer('room-1', 'player-1', {
+          question_id: 42,
+          selected_choices: [0],
+          client_timestamp: 1234567890,
+        }),
       ).rejects.toThrow(AppError)
     })
   })

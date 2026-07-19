@@ -3,6 +3,7 @@ import { Server } from 'socket.io'
 import type { AuthenticatedRequest } from '../middleware/auth.js'
 import { config } from '../config/index.js'
 import { engineClient } from './engine-client.js'
+import logger from './logger.js'
 
 let io: Server
 
@@ -20,11 +21,11 @@ export function initSocket(httpServer: HTTPServer) {
 
   io.on('connection', (socket) => {
     const req = socket.request as AuthenticatedRequest
-    console.log(JSON.stringify({ event: 'socket-connected', socketId: socket.id }))
+    logger.info({ event: 'socket-connected', socketId: socket.id }, 'Socket connected')
 
     socket.on('join-room', (roomId: string) => {
       socket.join(`room:${roomId}`)
-      console.log(JSON.stringify({ event: 'socket-join-room', socketId: socket.id, roomId }))
+      logger.info({ event: 'socket-join-room', socketId: socket.id, roomId }, 'Socket joined room')
     })
 
     socket.on('leave-room', (roomId: string) => {
@@ -68,16 +69,14 @@ export function initSocket(httpServer: HTTPServer) {
       })
       // Forward to quiz-engine for scoring.
       try {
-        await engineClient.submitAnswer(
-          data.roomId,
-          data.playerId,
-          data.questionId,
-          data.selectedChoices,
-          data.clientTimestamp,
-        )
+        await engineClient.submitAnswer(data.roomId, data.playerId, {
+          question_id: data.questionId,
+          selected_choices: data.selectedChoices,
+          client_timestamp: data.clientTimestamp,
+        })
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err)
-        console.error(JSON.stringify({ event: 'answer-forward-error', error: message }))
+        logger.error({ event: 'answer-forward-error', error: message }, 'Failed to forward answer to engine')
         io.to(socket.id).emit('answer-error', { error: message })
       }
     })
@@ -91,7 +90,7 @@ export function initSocket(httpServer: HTTPServer) {
         })
         engineClient.removePlayer(info.roomId, info.playerId).catch(() => {})
       }
-      console.log(JSON.stringify({ event: 'socket-disconnected', socketId: socket.id }))
+      logger.info({ event: 'socket-disconnected', socketId: socket.id }, 'Socket disconnected')
     })
   })
 

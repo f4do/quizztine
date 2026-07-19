@@ -1,6 +1,7 @@
 import { prisma } from '../lib/prisma.js'
 import { ValidationError, ForbiddenError } from '../types/errors.js'
 import { engineClient } from '../lib/engine-client.js'
+import logger from '../lib/logger.js'
 import type { Response } from 'express'
 import type { AuthenticatedRequest } from '../middleware/auth.js'
 import crypto from 'crypto'
@@ -84,10 +85,11 @@ export async function createRoom(req: AuthenticatedRequest, res: Response) {
       const choices = q.choices as Array<{ text: string; isCorrect: boolean }>
       return {
         id: q.id,
-        correctChoices: choices
+        correct_choices: choices
           .map((c, i) => (c.isCorrect ? i : -1))
           .filter((i) => i !== -1),
         difficulty: q.difficulty.toLowerCase(),
+        question_type: q.questionType,
       }
     }),
     mode,
@@ -96,14 +98,21 @@ export async function createRoom(req: AuthenticatedRequest, res: Response) {
 
   // Call quiz-engine to register the room
   try {
-    await engineClient.createRoom(room.id, enginePayload.questions, enginePayload.mode, enginePayload.timer, room.code, creatorPlayerId)
+    await engineClient.createRoom({
+      id: room.id,
+      questions: enginePayload.questions,
+      mode: enginePayload.mode,
+      timer: enginePayload.timer,
+      code: room.code,
+      creator_player_id: creatorPlayerId,
+    })
   } catch (err) {
     // Clean up the DB room if engine call fails
     await prisma.room.delete({ where: { id: room.id } }).catch(() => {})
     throw err
   }
 
-  console.log(JSON.stringify({ event: 'room-created', roomId: room.id, code, questionCount: selectedQuestions.length }))
+  logger.info({ event: 'room-created', roomId: room.id, code, questionCount: selectedQuestions.length }, 'Room created')
 
   res.status(201).json({
     room: {
@@ -137,7 +146,7 @@ export async function getRoomState(req: AuthenticatedRequest, res: Response) {
 export async function joinRoom(req: AuthenticatedRequest, res: Response) {
   const roomId = req.params.id as string
   const { player_id, nickname } = req.body as { player_id: string; nickname: string }
-  await engineClient.joinRoom(roomId, player_id, nickname)
+  await engineClient.joinRoom(roomId, { player_id, nickname })
 
   // Map authenticated user to player session for stats attribution
   if (req.user) {
@@ -198,15 +207,16 @@ export async function replayRoom(req: AuthenticatedRequest, res: Response) {
     const choices = q.choices as Array<{ text: string; isCorrect: boolean }>
     return {
       id: q.id,
-      correctChoices: choices
+      correct_choices: choices
         .map((c, i) => (c.isCorrect ? i : -1))
         .filter((i) => i !== -1),
       difficulty: q.difficulty.toLowerCase(),
+      question_type: q.questionType,
     }
   })
 
   // Call engine to replace questions and reset the room
-  await engineClient.replayRoom(roomId, newQuestions)
+  await engineClient.replayRoom(roomId, { questions: newQuestions })
 
   // Broadcast to all players so they return to pre-game
   try {

@@ -1,10 +1,25 @@
 import { config } from '../config/index.js'
 import { AppError } from '../types/errors.js'
+import logger from '../lib/logger.js'
 
-interface QuestionPayload {
+/* ------------------------------------------------------------------ */
+/*  Public interfaces                                                  */
+/* ------------------------------------------------------------------ */
+
+export interface QuestionPayload {
   id: number
-  correctChoices: number[]
+  correct_choices: number[]
   difficulty: string
+  question_type: string
+}
+
+export interface CreateRoomPayload {
+  id?: string
+  questions: QuestionPayload[]
+  mode: string
+  timer: number
+  code?: string
+  creator_player_id?: string
 }
 
 interface CreateRoomResponse {
@@ -12,6 +27,23 @@ interface CreateRoomResponse {
   mode: string
   timer: number
   question_count: number
+}
+
+interface JoinRoomPayload {
+  player_id: string
+  nickname: string
+}
+
+interface JoinRoomResponse {
+  room_id: string
+  player_id: string
+  nickname: string
+}
+
+interface AnswerPayload {
+  question_id: number
+  selected_choices: number[]
+  client_timestamp: number
 }
 
 interface AnswerResponse {
@@ -22,6 +54,32 @@ interface AnswerResponse {
   cumulative_time: number
 }
 
+interface RoomResponse {
+  id: string
+  code: string
+  mode: string
+  timer: number
+  status: string
+  player_count: number
+  current_question_index: number
+  total_questions: number
+  players: Array<{
+    id: string
+    nickname: string
+    score: number
+    streak: number
+    cumulative_time: number
+    finished: boolean
+    disconnected: boolean
+    answered: boolean
+  }>
+}
+
+interface CurrentQuestionResponse {
+  question_id: number
+  index: number
+}
+
 interface ScoreboardEntry {
   player_id: string
   nickname: string
@@ -30,156 +88,172 @@ interface ScoreboardEntry {
   cumulative_time: number
 }
 
+interface ReplayPayload {
+  questions?: QuestionPayload[]
+}
+
+interface ReplayResponse {
+  status: string
+}
+
+/* ------------------------------------------------------------------ */
+/*  Client class                                                       */
+/* ------------------------------------------------------------------ */
+
 class EngineClient {
   private baseUrl: string
 
-  constructor() {
-    this.baseUrl = config.quizEngineUrl
+  constructor(baseUrl = config.quizEngineUrl) {
+    this.baseUrl = baseUrl
   }
 
-  async createRoom(roomId: string, questions: QuestionPayload[], mode: string, timer: number, code?: string, creatorPlayerId?: string): Promise<CreateRoomResponse> {
-    const body: Record<string, unknown> = {
-      id: roomId,
-      questions: questions.map((q) => ({
-        id: q.id,
-        correct_choices: q.correctChoices,
-        difficulty: q.difficulty,
-      })),
-      mode,
-      timer,
+  /**
+   * Low-level request helper.
+   *
+   * @param method  HTTP method
+   * @param path    URL path (appended to baseUrl)
+   * @param body    Optional request body (serialised as JSON)
+   * @param options.timeout  Per-request timeout in ms (default: config.engineTimeout)
+   * @param options.retries  Number of automatic retries on timeouts / 5xx (default: 0)
+   */
+  private async _request<T>(
+    method: string,
+    path: string,
+    body?: unknown,
+    options?: { timeout?: number; retries?: number },
+  ): Promise<T> {
+    const url = `${this.baseUrl}${path}`
+    const timeout = options?.timeout ?? config.engineTimeout
+    const retries = options?.retries ?? 0
+
+    logger.debug({ method, path, timeout }, 'engine request')
+
+    for (let attempt = 0; attempt <= retries; attempt++) {
+      try {
+        const resp = await fetch(url, {
+          method,
+          headers:
+            body !== undefined
+              ? { 'Content-Type': 'application/json' }
+              : undefined,
+          body: body !== undefined ? JSON.stringify(body) : undefined,
+          signal: AbortSignal.timeout(timeout),
+        })
+
+        if (resp.ok) {
+          // Some responses (e.g. 204 No Content) have no body; return early
+          if (
+            resp.status === 204 ||
+            resp.headers?.get('content-length') === '0'
+          ) {
+            return undefined as unknown as T
+          }
+          return (await resp.json()) as T
+        }
+
+        // Uniform error handling – extracted once
+        const err = await resp.json().catch(() => ({ error: 'Engine error' }))
+        const message =
+          err.detail?.error ?? err.error ?? 'Quiz-engine unavailable'
+        throw new AppError(503, 'ENGINE_ERROR', message)
+      } catch (err) {
+        if (err instanceof AppError) throw err
+
+        // Retry on transient failures (timeouts / 5xx) when retries > 0
+        if (attempt < retries) {
+          const delay = 100 * Math.pow(2, attempt) // 100 ms, 200 ms, 400 ms …
+          logger.warn(
+            { err, method, path, attempt, retries },
+            'engine request failed, retrying',
+          )
+          await new Promise((resolve) => setTimeout(resolve, delay))
+          continue
+        }
+
+        logger.error(
+          { err, method, path, timeout },
+          'engine request failed',
+        )
+        throw new AppError(503, 'ENGINE_ERROR', 'Quiz-engine unavailable')
+      }
     }
-    if (code) body.code = code
-    if (creatorPlayerId) body.creator_player_id = creatorPlayerId
-    const resp = await fetch(`${this.baseUrl}/rooms`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-      signal: AbortSignal.timeout(5000),
-    })
-    if (!resp.ok) {
-      const err = await resp.json().catch(() => ({ error: 'Engine error' }))
-      // FastAPI wraps error details in `detail` key
-      const message = err.detail?.error ?? err.error ?? 'Quiz-engine unavailable'
-      throw new AppError(503, 'ENGINE_ERROR', message)
-    }
-    return resp.json() as Promise<CreateRoomResponse>
+
+    // TypeScript unreachable – the loop always returns or throws
+    throw new AppError(503, 'ENGINE_ERROR', 'Quiz-engine unavailable')
+  }
+
+  /* ------------------------------------------------------------------ */
+  /*  Public API methods – each is a thin one-liner                      */
+  /* ------------------------------------------------------------------ */
+
+  async createRoom(data: CreateRoomPayload): Promise<CreateRoomResponse> {
+    return this._request<CreateRoomResponse>('POST', '/rooms', data)
   }
 
   async removePlayer(roomId: string, playerId: string): Promise<void> {
-    const resp = await fetch(`${this.baseUrl}/rooms/${roomId}/players/${playerId}`, {
-      method: 'DELETE',
-      signal: AbortSignal.timeout(5000),
-    })
-    if (!resp.ok) {
-      const err = await resp.json().catch(() => ({ error: 'Engine error' }))
-      const message = err.detail?.error ?? err.error ?? 'Quiz-engine unavailable'
-      throw new AppError(503, 'ENGINE_ERROR', message)
-    }
+    await this._request<void>(
+      'DELETE',
+      `/rooms/${roomId}/players/${playerId}`,
+    )
   }
 
-  async joinRoom(roomId: string, playerId: string, nickname: string): Promise<void> {
-    const body = { player_id: playerId, nickname }
-    const resp = await fetch(`${this.baseUrl}/rooms/${roomId}/join`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-      signal: AbortSignal.timeout(5000),
-    })
-    if (!resp.ok) {
-      const err = await resp.json().catch(() => ({ error: 'Engine error' }))
-      const message = err.detail?.error ?? err.error ?? 'Quiz-engine unavailable'
-      throw new AppError(503, 'ENGINE_ERROR', message)
-    }
+  async joinRoom(
+    roomId: string,
+    data: JoinRoomPayload,
+  ): Promise<JoinRoomResponse> {
+    return this._request<JoinRoomResponse>(
+      'POST',
+      `/rooms/${roomId}/join`,
+      data,
+    )
   }
 
-  async submitAnswer(roomId: string, playerId: string, questionId: number, selectedChoices: number[], clientTimestamp: number): Promise<AnswerResponse> {
-    const body = {
-      question_id: questionId,
-      selected_choices: selectedChoices,
-      client_timestamp: clientTimestamp,
-    }
-    const resp = await fetch(`${this.baseUrl}/rooms/${roomId}/answer/${playerId}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-      signal: AbortSignal.timeout(5000),
-    })
-    if (!resp.ok) {
-      const err = await resp.json().catch(() => ({ error: 'Engine error' }))
-      const message = err.detail?.error ?? err.error ?? 'Quiz-engine unavailable'
-      throw new AppError(503, 'ENGINE_ERROR', message)
-    }
-    return resp.json() as Promise<AnswerResponse>
+  async submitAnswer(
+    roomId: string,
+    playerId: string,
+    data: AnswerPayload,
+  ): Promise<AnswerResponse> {
+    return this._request<AnswerResponse>(
+      'POST',
+      `/rooms/${roomId}/answer/${playerId}`,
+      data,
+    )
   }
 
-  async getRoom(roomId: string): Promise<any> {
-    const resp = await fetch(`${this.baseUrl}/rooms/${roomId}`, {
-      signal: AbortSignal.timeout(5000),
-    })
-    if (!resp.ok) {
-      const err = await resp.json().catch(() => ({ error: 'Engine error' }))
-      const message = err.detail?.error ?? err.error ?? 'Quiz-engine unavailable'
-      throw new AppError(503, 'ENGINE_ERROR', message)
-    }
-    return resp.json()
+  async getRoom(roomId: string): Promise<RoomResponse> {
+    return this._request<RoomResponse>('GET', `/rooms/${roomId}`)
   }
 
-  async getCurrentQuestion(roomId: string, playerId: string): Promise<{ question_id: number; index: number }> {
-    const resp = await fetch(`${this.baseUrl}/rooms/${roomId}/current-question/${playerId}`, {
-      signal: AbortSignal.timeout(5000),
-    })
-    if (!resp.ok) {
-      const err = await resp.json().catch(() => ({ error: 'Engine error' }))
-      const message = err.detail?.error ?? err.error ?? 'Quiz-engine unavailable'
-      throw new AppError(503, 'ENGINE_ERROR', message)
-    }
-    return resp.json()
+  async getCurrentQuestion(
+    roomId: string,
+    playerId: string,
+  ): Promise<CurrentQuestionResponse> {
+    return this._request<CurrentQuestionResponse>(
+      'GET',
+      `/rooms/${roomId}/current-question/${playerId}`,
+    )
   }
 
   async startGame(roomId: string, playerId: string): Promise<void> {
-    const resp = await fetch(`${this.baseUrl}/rooms/${roomId}/start?player_id=${playerId}`, {
-      method: 'POST',
-      signal: AbortSignal.timeout(5000),
-    })
-    if (!resp.ok) {
-      const err = await resp.json().catch(() => ({ error: 'Engine error' }))
-      const message = err.detail?.error ?? err.error ?? 'Quiz-engine unavailable'
-      throw new AppError(503, 'ENGINE_ERROR', message)
-    }
+    await this._request<void>(
+      'POST',
+      `/rooms/${roomId}/start?player_id=${playerId}`,
+    )
   }
 
-  async replayRoom(roomId: string, questions?: QuestionPayload[]): Promise<void> {
-    const body: Record<string, unknown> = {}
-    if (questions) {
-      body.questions = questions.map((q) => ({
-        id: q.id,
-        correct_choices: q.correctChoices,
-        difficulty: q.difficulty,
-      }))
-    }
-    const resp = await fetch(`${this.baseUrl}/rooms/${roomId}/replay`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-      signal: AbortSignal.timeout(5000),
-    })
-    if (!resp.ok) {
-      const err = await resp.json().catch(() => ({ error: 'Engine error' }))
-      const message = err.detail?.error ?? err.error ?? 'Quiz-engine unavailable'
-      throw new AppError(503, 'ENGINE_ERROR', message)
-    }
+  async replayRoom(
+    roomId: string,
+    data?: ReplayPayload,
+  ): Promise<ReplayResponse> {
+    return this._request<ReplayResponse>(
+      'POST',
+      `/rooms/${roomId}/replay`,
+      data,
+    )
   }
 
   async getScoreboard(roomId: string): Promise<ScoreboardEntry[]> {
-    const resp = await fetch(`${this.baseUrl}/rooms/${roomId}/scoreboard`, {
-      signal: AbortSignal.timeout(5000),
-    })
-    if (!resp.ok) {
-      const err = await resp.json().catch(() => ({ error: 'Engine error' }))
-      const message = err.detail?.error ?? err.error ?? 'Quiz-engine unavailable'
-      throw new AppError(503, 'ENGINE_ERROR', message)
-    }
-    return resp.json() as Promise<ScoreboardEntry[]>
+    return this._request<ScoreboardEntry[]>('GET', `/rooms/${roomId}/scoreboard`)
   }
 }
 
