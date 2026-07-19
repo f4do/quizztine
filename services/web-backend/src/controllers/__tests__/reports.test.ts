@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import type { Response } from 'express'
 import { reportQuestion } from '../reports.js'
+import { mockReq, mockRes } from '../../test/utils.js'
 import { ValidationError, NotFoundError } from '../../types/errors.js'
 import type { AuthenticatedRequest } from '../../middleware/auth.js'
 
@@ -21,26 +21,6 @@ vi.mock('../../lib/prisma.js', () => ({
 }))
 
 const mockQuestion = { id: 1, text: 'Test question', visibility: 'PUBLIC' }
-
-function mockReq(overrides: Record<string, unknown> = {}): AuthenticatedRequest {
-  return {
-    body: {},
-    user: undefined,
-    params: {},
-    query: {},
-    cookies: {},
-    ip: '127.0.0.1',
-    socket: { remoteAddress: '127.0.0.1' },
-    ...overrides,
-  } as unknown as AuthenticatedRequest
-}
-
-function mockRes(): Response {
-  const res: Record<string, unknown> = {}
-  res.status = vi.fn().mockReturnValue(res)
-  res.json = vi.fn().mockReturnValue(res)
-  return res as unknown as Response
-}
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -133,6 +113,7 @@ describe('reportQuestion', () => {
     const req = mockReq({
       params: { questionId: '1' },
       body: { reason: '  Typo  ' },
+      ip: '127.0.0.1',
     })
     const res = mockRes()
     await reportQuestion(req, res)

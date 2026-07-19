@@ -1,13 +1,15 @@
 import crypto from 'crypto'
 import { SignJWT, jwtVerify } from 'jose'
+import { z } from 'zod'
 import { config } from '../config/index.js'
 
-interface TokenPayload {
-  id: string
-  pseudo: string
-  email: string
-  role: string
-}
+const TokenPayloadSchema = z.object({
+  id: z.string(),
+  pseudo: z.string(),
+  email: z.string(),
+  role: z.string(),
+})
+type TokenPayload = z.infer<typeof TokenPayloadSchema>
 
 function getSecretKey(): Uint8Array {
   if (!config.jwtSecret) {
@@ -17,14 +19,14 @@ function getSecretKey(): Uint8Array {
 }
 
 export async function signAccessToken(payload: TokenPayload): Promise<string> {
-  return new SignJWT({ ...payload } as unknown as Record<string, unknown>)
+  return new SignJWT({ ...payload })
     .setProtectedHeader({ alg: 'HS256' })
     .setExpirationTime('1h')
     .sign(getSecretKey())
 }
 
 export async function signRefreshToken(payload: TokenPayload): Promise<string> {
-  return new SignJWT({ ...payload } as unknown as Record<string, unknown>)
+  return new SignJWT({ ...payload })
     .setProtectedHeader({ alg: 'HS256' })
     .setExpirationTime('7d')
     .sign(getSecretKey())
@@ -32,7 +34,11 @@ export async function signRefreshToken(payload: TokenPayload): Promise<string> {
 
 export async function verifyToken(token: string): Promise<TokenPayload> {
   const { payload } = await jwtVerify(token, getSecretKey())
-  return payload as unknown as TokenPayload
+  const result = TokenPayloadSchema.safeParse(payload)
+  if (!result.success) {
+    throw new Error('Invalid token payload')
+  }
+  return result.data
 }
 
 export function hashToken(token: string): string {

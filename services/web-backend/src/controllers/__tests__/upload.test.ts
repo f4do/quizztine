@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import type { Response } from 'express'
 import { uploadFile } from '../upload.js'
+import { mockReq, mockRes } from '../../test/utils.js'
 import { ValidationError } from '../../types/errors.js'
 import type { AuthenticatedRequest } from '../../middleware/auth.js'
 
@@ -12,25 +12,6 @@ vi.mock('fs', () => ({
   default: { unlinkSync: mockUnlinkSync },
   unlinkSync: mockUnlinkSync,
 }))
-
-function mockReq(overrides: Record<string, unknown> = {}): AuthenticatedRequest {
-  return {
-    body: {},
-    user: undefined,
-    params: {},
-    query: {},
-    cookies: {},
-    file: undefined,
-    ...overrides,
-  } as unknown as AuthenticatedRequest
-}
-
-function mockRes(): Response {
-  const res: Record<string, unknown> = {}
-  res.status = vi.fn().mockReturnValue(res)
-  res.json = vi.fn().mockReturnValue(res)
-  return res as unknown as Response
-}
 
 beforeEach(() => {
   vi.clearAllMocks()

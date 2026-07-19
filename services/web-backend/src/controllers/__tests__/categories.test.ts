@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import type { Response } from 'express'
 import { listCategories, createCategory, deleteCategory } from '../categories.js'
+import { mockReq, mockRes } from '../../test/utils.js'
 import { ForbiddenError } from '../../types/errors.js'
 import type { AuthenticatedRequest } from '../../middleware/auth.js'
 
@@ -21,24 +21,6 @@ vi.mock('../../lib/prisma.js', () => ({
     },
   },
 }))
-
-function mockReq(overrides: Record<string, unknown> = {}): AuthenticatedRequest {
-  return {
-    body: {},
-    user: undefined,
-    params: {},
-    query: {},
-    cookies: {},
-    ...overrides,
-  } as unknown as AuthenticatedRequest
-}
-
-function mockRes(): Response {
-  const res: Record<string, unknown> = {}
-  res.status = vi.fn().mockReturnValue(res)
-  res.json = vi.fn().mockReturnValue(res)
-  return res as unknown as Response
-}
 
 beforeEach(() => {
   vi.clearAllMocks()

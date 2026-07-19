@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import type { Response } from 'express'
 import { getMe, updateMe, updateMyPassword, deleteMe } from '../users.js'
+import { mockReq, mockRes } from '../../test/utils.js'
 import { AuthError, NotFoundError, ValidationError } from '../../types/errors.js'
 import type { AuthenticatedRequest } from '../../middleware/auth.js'
 
@@ -9,7 +9,7 @@ const { mockCompare, mockHash } = vi.hoisted(() => ({
   mockHash: vi.fn(),
 }))
 
-vi.mock('bcrypt', () => ({
+vi.mock('bcryptjs', () => ({
   default: {
     compare: mockCompare,
     hash: mockHash,
@@ -33,25 +33,6 @@ const mockPrisma = vi.hoisted(() => ({
 
 vi.mock('../../lib/prisma.js', () => ({ prisma: mockPrisma }))
 
-function mockReq(overrides: Record<string, unknown> = {}): AuthenticatedRequest {
-  return {
-    body: {},
-    user: { id: 'u1', pseudo: 'alice', email: 'alice@test.com', role: 'USER' },
-    params: {},
-    query: {},
-    cookies: {},
-    ...overrides,
-  } as unknown as AuthenticatedRequest
-}
-
-function mockRes(): Response {
-  const res: Record<string, unknown> = {}
-  res.status = vi.fn().mockReturnValue(res)
-  res.json = vi.fn().mockReturnValue(res)
-  res.clearCookie = vi.fn().mockReturnValue(res)
-  return res as unknown as Response
-}
-
 beforeEach(() => {
   vi.clearAllMocks()
 })
@@ -70,7 +51,7 @@ describe('getMe', () => {
       createdAt,
     })
 
-    const req = mockReq()
+    const req = mockReq({ user: { id: 'u1', pseudo: 'alice', email: 'alice@test.com', role: 'USER' } })
     const res = mockRes()
 
     await getMe(req, res)
@@ -111,7 +92,7 @@ describe('updateMe', () => {
       createdAt: new Date('2026-01-01'),
     })
 
-    const req = mockReq({ body: { pseudo: 'alice2', email: 'alice2@test.com' } })
+    const req = mockReq({ body: { pseudo: 'alice2', email: 'alice2@test.com' }, user: { id: 'u1', pseudo: 'alice', email: 'alice@test.com', role: 'USER' } })
     const res = mockRes()
 
     await updateMe(req, res)
@@ -127,14 +108,14 @@ describe('updateMe', () => {
   it('rejects duplicate pseudo or email', async () => {
     mockPrisma.user.findFirst.mockResolvedValue({ id: 'u2' })
 
-    const req = mockReq({ body: { pseudo: 'bob' } })
+    const req = mockReq({ body: { pseudo: 'bob' }, user: { id: 'u1', pseudo: 'alice', email: 'alice@test.com', role: 'USER' } })
     const res = mockRes()
 
     await expect(updateMe(req, res)).rejects.toThrow(ValidationError)
   })
 
   it('rejects empty payload', async () => {
-    const req = mockReq({ body: {} })
+    const req = mockReq({ body: {}, user: { id: 'u1', pseudo: 'alice', email: 'alice@test.com', role: 'USER' } })
     const res = mockRes()
 
     await expect(updateMe(req, res)).rejects.toThrow(ValidationError)
@@ -150,6 +131,7 @@ describe('updateMyPassword', () => {
 
     const req = mockReq({
       body: { currentPassword: 'oldpassword1234', password: 'newpassword1234', confirmPassword: 'newpassword1234' },
+      user: { id: 'u1', pseudo: 'alice', email: 'alice@test.com', role: 'USER' },
     })
     const res = mockRes()
 
@@ -170,6 +152,7 @@ describe('updateMyPassword', () => {
 
     const req = mockReq({
       body: { currentPassword: 'wrong', password: 'newpassword1234', confirmPassword: 'newpassword1234' },
+      user: { id: 'u1', pseudo: 'alice', email: 'alice@test.com', role: 'USER' },
     })
     const res = mockRes()
 
@@ -182,7 +165,7 @@ describe('deleteMe', () => {
     mockPrisma.user.findUnique.mockResolvedValue({ id: 'u1', password: 'hashed' })
     mockCompare.mockResolvedValue(true)
 
-    const req = mockReq({ body: { password: 'password1234' } })
+    const req = mockReq({ body: { password: 'password1234' }, user: { id: 'u1', pseudo: 'alice', email: 'alice@test.com', role: 'USER' } })
     const res = mockRes()
 
     await deleteMe(req, res)
@@ -195,7 +178,7 @@ describe('deleteMe', () => {
   })
 
   it('rejects missing password', async () => {
-    const req = mockReq({ body: {} })
+    const req = mockReq({ body: {}, user: { id: 'u1', pseudo: 'alice', email: 'alice@test.com', role: 'USER' } })
     const res = mockRes()
 
     await expect(deleteMe(req, res)).rejects.toThrow(ValidationError)
@@ -205,7 +188,7 @@ describe('deleteMe', () => {
     mockPrisma.user.findUnique.mockResolvedValue({ id: 'u1', password: 'hashed' })
     mockCompare.mockResolvedValue(false)
 
-    const req = mockReq({ body: { password: 'wrong' } })
+    const req = mockReq({ body: { password: 'wrong' }, user: { id: 'u1', pseudo: 'alice', email: 'alice@test.com', role: 'USER' } })
     const res = mockRes()
 
     await expect(deleteMe(req, res)).rejects.toThrow(AuthError)

@@ -2,13 +2,13 @@ packages:
   - '.'
 
 allowBuilds:
-  bcrypt: true
+  bcryptjs: true
   '@prisma/engines': true
   esbuild: true
   prisma: true
 
 onlyBuiltDependencies:
-  - bcrypt
+  - bcryptjs
   - '@prisma/engines'
   - esbuild
   - prisma

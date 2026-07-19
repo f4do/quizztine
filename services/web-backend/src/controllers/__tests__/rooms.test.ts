@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import type { Response } from 'express'
 import { createRoom } from '../rooms.js'
+import { mockReq, mockRes } from '../../test/utils.js'
 import type { AuthenticatedRequest } from '../../middleware/auth.js'
 
 const { mockFindMany, mockCreate, mockRoomDelete, mockGameEngineCreateRoom } = vi.hoisted(() => ({
@@ -32,24 +32,6 @@ const ownPrivateQuestions = [
 const otherPrivateQuestions = [
   { id: 4, choices: [{ text: 'D', isCorrect: true }], difficulty: 'EASY' },
 ]
-
-function mockReq(overrides: Record<string, unknown> = {}): AuthenticatedRequest {
-  return {
-    body: {},
-    user: undefined,
-    params: {},
-    query: {},
-    cookies: {},
-    ...overrides,
-  } as unknown as AuthenticatedRequest
-}
-
-function mockRes(): Response {
-  const res: Record<string, unknown> = {}
-  res.status = vi.fn().mockReturnValue(res)
-  res.json = vi.fn().mockReturnValue(res)
-  return res as unknown as Response
-}
 
 beforeEach(() => {
   vi.clearAllMocks()

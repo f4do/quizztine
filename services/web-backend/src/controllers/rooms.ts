@@ -7,6 +7,15 @@ import type { Response } from 'express'
 import type { AuthenticatedRequest } from '../middleware/auth.js'
 import crypto from 'crypto'
 
+function fisherYatesShuffle<T>(array: T[]): T[] {
+  const shuffled = [...array]
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+    ;[shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]
+  }
+  return shuffled
+}
+
 function generateRoomCode(): string {
   return crypto.randomBytes(3).toString('hex').toUpperCase().slice(0, 6)
 }
@@ -54,7 +63,7 @@ export async function createRoom(req: AuthenticatedRequest, res: Response) {
   const usedCount = Math.min(count, Math.max(availableQuestions.length, 1))
 
   // Pseudo-random selection: always shuffle, even when using all
-  const shuffled = [...availableQuestions].sort(() => Math.random() - 0.5)
+  const shuffled = fisherYatesShuffle(availableQuestions)
   let selectedQuestions = shuffled
   let warning: string | undefined
   if (availableQuestions.length < count) {
@@ -195,7 +204,7 @@ export async function replayRoom(req: AuthenticatedRequest, res: Response) {
   const where: Record<string, unknown> = { visibility: 'PUBLIC' }
   const availableQuestions = await prisma.question.findMany({ where })
   const count = dbRoom.questionCount
-  const shuffled = [...availableQuestions].sort(() => Math.random() - 0.5)
+  const shuffled = fisherYatesShuffle(availableQuestions)
   const selectedQuestions = shuffled.length > count ? shuffled.slice(0, count) : shuffled
 
   if (selectedQuestions.length === 0) {
