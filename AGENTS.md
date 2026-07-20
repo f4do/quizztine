@@ -391,17 +391,13 @@ GET    /categories                         # List categories
 |---|---|---|
 | Backend controllers | ~200 (11 test files) | Auth, categories, host, profile, questions, reports, results, room-events, rooms, upload, users |
 | Backend lib | ~40 (3 test files) | JWT, validation, socket |
-| Backend engine | ~65 (3 test files) | Game flow, room store, scoring |
-| **Backend total** | **~277** (19 test files) | Vitest |
-| Frontend | ~167 (13 test files) | Vitest + RTL. Gaps: AdminHostsPage (0 tests) |
+| Backend engine | ~65 (4 test files) | Game flow, room store, scoring, notifications |
+| **Backend total** | **~296** (20 test files) | Vitest |
+| Frontend | ~185 (13 test files) | Vitest + RTL. Gaps: AdminHostsPage (0 tests) |
 | Quiz engine (Python, archived) | 39 (3 test files) | Preserved for reference |
 
 ### Notable test gaps
-- `AdminHostsPage` (1564 lines) — **0 tests** (complex admin UI)
-- `PhrasesProvider` — 6 tests covering only i18n fallback, not DB loading or caching
-- `fetchAvatar` (host controller) — untested
-- `notifications.ts` (engine) — untested
-- Timer expiry, reconnection, and `handlePlayAgain` in `useRoomGame` — untested paths
+- `AdminHostsPage` (1564 lines) — **0 tests** (complex admin UI, deferred pending decomposition)
 
 ## Known gaps / unimplemented features
 
