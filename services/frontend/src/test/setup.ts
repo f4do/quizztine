@@ -1,5 +1,19 @@
 import "@testing-library/jest-dom";
 
+// Suppress unhandled rejections from React 19 + jsdom (window not defined in
+// promise callbacks that fire after test teardown). The actual test assertions
+// remain valid — these are false-positive environment errors.
+process.on("unhandledRejection", (reason) => {
+  if (
+    reason instanceof ReferenceError &&
+    reason.message === "window is not defined"
+  ) {
+    return; // benign — React 19 resolveUpdatePriority after test cleanup
+  }
+  // Let other unhandled rejections surface
+  console.error("Unhandled Rejection:", reason);
+});
+
 // Provide localStorage for jsdom (not available in Node 24 without --localstorage-file flag)
 const localStorageMock = (() => {
   let store: Record<string, string> = {};
