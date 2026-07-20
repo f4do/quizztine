@@ -14,33 +14,24 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - uses: pnpm/action-setup@v4
         with:
           version: latest
-
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'pnpm'
-          cache-dependency-path: 'services/*/pnpm-lock.yaml'
-
       - name: Install backend dependencies
         run: pnpm install
         working-directory: services/web-backend
-
       - name: Generate Prisma client
         run: pnpm prisma generate
         working-directory: services/web-backend
-
       - name: Install frontend dependencies
         run: pnpm install
         working-directory: services/frontend
-
       - name: Lint frontend
         run: pnpm lint
         working-directory: services/frontend
-
       - name: Lint backend
         run: pnpm lint
         working-directory: services/web-backend
@@ -49,33 +40,24 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - uses: pnpm/action-setup@v4
         with:
           version: latest
-
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'pnpm'
-          cache-dependency-path: 'services/*/pnpm-lock.yaml'
-
       - name: Install backend dependencies
         run: pnpm install
         working-directory: services/web-backend
-
       - name: Generate Prisma client
         run: pnpm prisma generate
         working-directory: services/web-backend
-
       - name: Install frontend dependencies
         run: pnpm install
         working-directory: services/frontend
-
       - name: Typecheck frontend
         run: pnpm typecheck
         working-directory: services/frontend
-
       - name: Typecheck backend
         run: pnpm typecheck
         working-directory: services/web-backend
@@ -98,25 +80,18 @@ jobs:
           - 5432:5432
     steps:
       - uses: actions/checkout@v4
-
       - uses: pnpm/action-setup@v4
         with:
           version: latest
-
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'pnpm'
-          cache-dependency-path: services/web-backend/pnpm-lock.yaml
-
       - name: Install dependencies
         run: pnpm install
         working-directory: services/web-backend
-
       - name: Generate Prisma client
         run: pnpm prisma generate
         working-directory: services/web-backend
-
       - name: Run tests
         run: pnpm test
         working-directory: services/web-backend
@@ -127,21 +102,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - uses: pnpm/action-setup@v4
         with:
           version: latest
-
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'pnpm'
-          cache-dependency-path: services/frontend/pnpm-lock.yaml
-
       - name: Install dependencies
         run: pnpm install
         working-directory: services/frontend
-
       - name: Run tests
         run: pnpm test
         working-directory: services/frontend
