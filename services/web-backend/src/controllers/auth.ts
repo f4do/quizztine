@@ -9,7 +9,7 @@ import type { Response } from 'express'
 import type { AuthenticatedRequest } from '../middleware/auth.js'
 import crypto from 'crypto'
 
-function setTokenCookies(res: Response, accessToken: string, refreshToken: string) {
+export function setTokenCookies(res: Response, accessToken: string, refreshToken: string) {
   const cookieBase = {
     httpOnly: true,
     secure: config.nodeEnv === 'production',

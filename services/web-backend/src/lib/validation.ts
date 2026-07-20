@@ -55,3 +55,16 @@ export type UpdateProfileInput = z.infer<typeof updateProfileSchema>
 export type UpdatePasswordInput = z.infer<typeof updatePasswordSchema>
 export type AdminUpdateUserInput = z.infer<typeof adminUpdateUserSchema>
 export type AdminResetPasswordInput = z.infer<typeof adminResetPasswordSchema>
+
+export const setupSchema = z.object({
+  pseudo: z.string().min(2).max(30),
+  email: z.string().email(),
+  password: z.string().min(12),
+  confirmPassword: z.string().min(12),
+  language: z.enum(['fr', 'en']),
+}).refine(({ password, confirmPassword }) => password === confirmPassword, {
+  message: 'Passwords do not match',
+  path: ['confirmPassword'],
+})
+
+export type SetupInput = z.infer<typeof setupSchema>
