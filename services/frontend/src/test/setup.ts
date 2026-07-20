@@ -1,16 +1,16 @@
 import "@testing-library/jest-dom";
 
-// Suppress unhandled rejections from React 19 + jsdom (window not defined in
-// promise callbacks that fire after test teardown). The actual test assertions
-// remain valid — these are false-positive environment errors.
+// Suppress unhandled rejections from React 19's internal resolveUpdatePriority
+// (window access) that fire after test teardown — the state update is a no-op
+// on an unmounted tree. Verified via stack trace to avoid masking real errors.
 process.on("unhandledRejection", (reason) => {
   if (
     reason instanceof ReferenceError &&
-    reason.message === "window is not defined"
+    reason.message === "window is not defined" &&
+    (reason as { stack?: string }).stack?.includes("resolveUpdatePriority")
   ) {
-    return; // benign — React 19 resolveUpdatePriority after test cleanup
+    return; // benign — React 19 internal after test cleanup
   }
-  // Let other unhandled rejections surface
   console.error("Unhandled Rejection:", reason);
 });
 
