@@ -1163,11 +1163,11 @@ describe("useRoomGame", () => {
 
     // Sequence: mount GET → replay POST → start POST → current-question GET → question GET
     (api as unknown as ReturnType<typeof vi.fn>)
-      .mockResolvedValueOnce(room)      // mount fetch
-      .mockResolvedValueOnce(undefined)  // replay POST
-      .mockResolvedValueOnce(undefined)  // start POST
-      .mockResolvedValueOnce(currentQ)   // current-question GET
-      .mockResolvedValueOnce(qResp);     // question GET
+      .mockResolvedValueOnce(room) // mount fetch
+      .mockResolvedValueOnce(undefined) // replay POST
+      .mockResolvedValueOnce(undefined) // start POST
+      .mockResolvedValueOnce(currentQ) // current-question GET
+      .mockResolvedValueOnce(qResp); // question GET
 
     const { result } = renderHook(() => useRoomGame("room-1"));
 
@@ -1189,10 +1189,9 @@ describe("useRoomGame", () => {
       method: "POST",
     });
     // 2. Start API called
-    expect(api).toHaveBeenCalledWith(
-      "/rooms/room-1/start?player_id=",
-      { method: "POST" },
-    );
+    expect(api).toHaveBeenCalledWith("/rooms/room-1/start?player_id=", {
+      method: "POST",
+    });
     // 3. Socket emitted game-started
     expect(mockSocket.emit).toHaveBeenCalledWith("game-started", {
       roomId: "room-1",
@@ -1328,7 +1327,7 @@ describe("useRoomGame", () => {
     (api as unknown as ReturnType<typeof vi.fn>)
       .mockResolvedValueOnce(room)
       .mockResolvedValueOnce(undefined) // join POST
-      .mockResolvedValueOnce(room);     // room re-fetch after join
+      .mockResolvedValueOnce(room); // room re-fetch after join
 
     const { result } = renderHook(() => useRoomGame("room-1"));
 

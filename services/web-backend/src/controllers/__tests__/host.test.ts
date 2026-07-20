@@ -617,7 +617,7 @@ describe('deletePhrase', () => {
 describe('fetchAvatar', () => {
   beforeEach(() => {
     vi.stubGlobal('fetch', vi.fn())
-    vi.spyOn(crypto, 'randomUUID').mockReturnValue('mock-uuid')
+    vi.spyOn(crypto, 'randomUUID').mockReturnValue('00000000-0000-0000-0000-000000000000')
   })
 
   describe('SSRF protection', () => {
@@ -700,11 +700,11 @@ describe('fetchAvatar', () => {
 
       expect(mockMkdir).toHaveBeenCalledWith('uploads', { recursive: true })
       expect(mockWriteFile).toHaveBeenCalledWith(
-        'uploads/mock-uuid.png',
+        'uploads/00000000-0000-0000-0000-000000000000.png',
         expect.any(Buffer),
       )
       expect(res.json).toHaveBeenCalledWith({
-        avatarUrl: '/uploads/mock-uuid.png',
+        avatarUrl: '/uploads/00000000-0000-0000-0000-000000000000.png',
       })
     })
   })

@@ -6,11 +6,46 @@ import type { Mock } from "vitest";
 // ── Mock data ───────────────────────────────────────────────────────────────
 
 const MOCK_PHRASES = [
-  { id: "1", context: "feedback.correct", lang: "fr", text: "Bravo !", priority: 10, scope: "game" },
-  { id: "2", context: "feedback.correct", lang: "fr", text: "Super !", priority: 5, scope: "game" },
-  { id: "3", context: "feedback.wrong", lang: "fr", text: "Raté...", priority: 10, scope: "game" },
-  { id: "4", context: "end.winner", lang: "fr", text: "Félicitations {{pseudo}} !", priority: 10, scope: "end" },
-  { id: "5", context: "feedback.correct", lang: "en", text: "Well done!", priority: 10, scope: "game" },
+  {
+    id: "1",
+    context: "feedback.correct",
+    lang: "fr",
+    text: "Bravo !",
+    priority: 10,
+    scope: "game",
+  },
+  {
+    id: "2",
+    context: "feedback.correct",
+    lang: "fr",
+    text: "Super !",
+    priority: 5,
+    scope: "game",
+  },
+  {
+    id: "3",
+    context: "feedback.wrong",
+    lang: "fr",
+    text: "Raté...",
+    priority: 10,
+    scope: "game",
+  },
+  {
+    id: "4",
+    context: "end.winner",
+    lang: "fr",
+    text: "Félicitations {{pseudo}} !",
+    priority: 10,
+    scope: "end",
+  },
+  {
+    id: "5",
+    context: "feedback.correct",
+    lang: "en",
+    text: "Well done!",
+    priority: 10,
+    scope: "game",
+  },
 ];
 
 // ── Mocks ──────────────────────────────────────────────────────────────────
@@ -153,7 +188,9 @@ describe("PhrasesProvider", () => {
     });
 
     renderPhrasesHook();
-    await waitFor(() => expect(localStorage.getItem("quizztine-phrases-cache")).not.toBeNull());
+    await waitFor(() =>
+      expect(localStorage.getItem("quizztine-phrases-cache")).not.toBeNull(),
+    );
 
     const cached = JSON.parse(localStorage.getItem("quizztine-phrases-cache")!);
     expect(cached.phrases).toHaveLength(5);
@@ -182,7 +219,16 @@ describe("PhrasesProvider", () => {
   it("refreshes stale cache in background while showing cached content", async () => {
     // Seed localStorage with stale cache (older than STALE_MS = 5min)
     const staleCache = JSON.stringify({
-      phrases: [{ id: "old", context: "feedback.correct", lang: "fr", text: "Ancienne", priority: 10, scope: "game" }],
+      phrases: [
+        {
+          id: "old",
+          context: "feedback.correct",
+          lang: "fr",
+          text: "Ancienne",
+          priority: 10,
+          scope: "game",
+        },
+      ],
       updatedAt: Date.now() - 10 * 60 * 1000, // 10 min ago (> 5 min stale)
     });
     localStorage.setItem("quizztine-phrases-cache", staleCache);
