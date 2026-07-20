@@ -160,30 +160,33 @@ export function useRoomGame(roomId: string): UseRoomGameReturn {
   const creatorNick = sessionStorage.getItem(`creatorNick-${roomId}`);
 
   /* ── submitAnswer (needed by timer expire & handlers) ──────────── */
-  const submitAnswer = useCallback((choices: number[]) => {
-    if (!socketRef.current || hasAnswered) return;
-    setHasAnswered(true);
+  const submitAnswer = useCallback(
+    (choices: number[]) => {
+      if (!socketRef.current || hasAnswered) return;
+      setHasAnswered(true);
 
-    setRoom((prev) =>
-      prev
-        ? {
-            ...prev,
-            players: prev.players.map((p) =>
-              p.id === playerIdRef.current ? { ...p, answered: true } : p,
-            ),
-          }
-        : prev,
-    );
-    const dbChoices = choices.map((i) => choiceOrder[i] ?? i);
-    socketRef.current.emit("answer", {
-      roomId,
-      playerId: playerIdRef.current,
-      questionId: questionIdRef.current,
-      selectedChoices: dbChoices,
-      clientTimestamp: Date.now(),
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [roomId, hasAnswered, choiceOrder]);
+      setRoom((prev) =>
+        prev
+          ? {
+              ...prev,
+              players: prev.players.map((p) =>
+                p.id === playerIdRef.current ? { ...p, answered: true } : p,
+              ),
+            }
+          : prev,
+      );
+      const dbChoices = choices.map((i) => choiceOrder[i] ?? i);
+      socketRef.current.emit("answer", {
+        roomId,
+        playerId: playerIdRef.current,
+        questionId: questionIdRef.current,
+        selectedChoices: dbChoices,
+        clientTimestamp: Date.now(),
+      });
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    },
+    [roomId, hasAnswered, choiceOrder],
+  );
 
   /* ── timer expire handler (ref to avoid stale closures) ────────── */
   const submitAnswerRef = useRef(submitAnswer);
@@ -266,9 +269,7 @@ export function useRoomGame(roomId: string): UseRoomGameReturn {
             }
           : prev,
       );
-      const qResp = (await api(
-        `/questions/${q.question_id}?game=true`,
-      )) as {
+      const qResp = (await api(`/questions/${q.question_id}?game=true`)) as {
         question: {
           text: string;
           difficulty: string;
@@ -401,9 +402,7 @@ export function useRoomGame(roomId: string): UseRoomGameReturn {
         setChoiceCorrect(newChoiceCorrect);
       }
 
-      const own = data.results.find(
-        (r) => r.player_id === playerIdRef.current,
-      );
+      const own = data.results.find((r) => r.player_id === playerIdRef.current);
       const allCorrect = data.results.filter((r) => r.correct);
       const allWrong = data.results.filter((r) => !r.correct);
       if (own) {
@@ -430,7 +429,9 @@ export function useRoomGame(roomId: string): UseRoomGameReturn {
           streak: own.streak,
           totalQuestions: roomRef.current?.total_questions,
           earnedPoints: own.points,
-          score: roomRef.current?.players.find(p => p.id === playerIdRef.current)?.score ?? 0,
+          score:
+            roomRef.current?.players.find((p) => p.id === playerIdRef.current)
+              ?.score ?? 0,
           correctCount: correctCount + (own.correct ? 1 : 0),
           category: "",
           pseudo: nickname,
@@ -453,20 +454,17 @@ export function useRoomGame(roomId: string): UseRoomGameReturn {
       loadScoreboardRef.current();
     });
 
-    socket.on(
-      "player-ready",
-      (data: { playerId: string; ready: boolean }) => {
-        setReadyPlayers((prev) => {
-          const next = new Set(prev);
-          if (data.ready) {
-            next.add(data.playerId);
-          } else {
-            next.delete(data.playerId);
-          }
-          return next;
-        });
-      },
-    );
+    socket.on("player-ready", (data: { playerId: string; ready: boolean }) => {
+      setReadyPlayers((prev) => {
+        const next = new Set(prev);
+        if (data.ready) {
+          next.add(data.playerId);
+        } else {
+          next.delete(data.playerId);
+        }
+        return next;
+      });
+    });
 
     socket.on("room-replayed", () => {
       clearFeedbackTimerRef.current();
@@ -593,10 +591,9 @@ export function useRoomGame(roomId: string): UseRoomGameReturn {
 
   const handleStart = useCallback(async () => {
     try {
-      await api(
-        `/rooms/${roomId}/start?player_id=${playerIdRef.current}`,
-        { method: "POST" },
-      );
+      await api(`/rooms/${roomId}/start?player_id=${playerIdRef.current}`, {
+        method: "POST",
+      });
       socketRef.current?.emit("game-started", { roomId });
       await fetchQuestion();
     } catch (err) {
@@ -649,10 +646,9 @@ export function useRoomGame(roomId: string): UseRoomGameReturn {
         clearFeedbackTimer();
         setResult(null);
         setScoreboard([]);
-        await api(
-          `/rooms/${roomId}/start?player_id=${playerIdRef.current}`,
-          { method: "POST" },
-        );
+        await api(`/rooms/${roomId}/start?player_id=${playerIdRef.current}`, {
+          method: "POST",
+        });
         socketRef.current?.emit("game-started", { roomId });
         await fetchQuestion();
       }
@@ -682,18 +678,21 @@ export function useRoomGame(roomId: string): UseRoomGameReturn {
     });
   }, [isReady, roomId]);
 
-  const handleChoice = useCallback((idx: number) => {
-    if (hasAnswered) return;
-    setSelectedChoices((prev) => {
-      const toggle = (xs: number[]) =>
-        xs.includes(idx) ? xs.filter((i) => i !== idx) : [...xs, idx];
-      if (questionCorrectCount <= 1) {
-        return prev.includes(idx) ? [] : [idx];
-      }
-      return toggle(prev);
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hasAnswered, questionCorrectCount]);
+  const handleChoice = useCallback(
+    (idx: number) => {
+      if (hasAnswered) return;
+      setSelectedChoices((prev) => {
+        const toggle = (xs: number[]) =>
+          xs.includes(idx) ? xs.filter((i) => i !== idx) : [...xs, idx];
+        if (questionCorrectCount <= 1) {
+          return prev.includes(idx) ? [] : [idx];
+        }
+        return toggle(prev);
+      });
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    },
+    [hasAnswered, questionCorrectCount],
+  );
 
   const handleAnswerSubmit = useCallback(() => {
     submitAnswer(selectedChoices);
@@ -718,10 +717,8 @@ export function useRoomGame(roomId: string): UseRoomGameReturn {
   );
 
   /* ── computed values ───────────────────────────────────────────── */
-  const answeredCount =
-    room?.players.filter((p) => p.answered).length ?? 0;
-  const totalActive =
-    room?.players.filter((p) => !p.disconnected).length ?? 0;
+  const answeredCount = room?.players.filter((p) => p.answered).length ?? 0;
+  const totalActive = room?.players.filter((p) => !p.disconnected).length ?? 0;
   const isFeedback = phase === "feedback";
   const perfectScore =
     correctCount > 0 &&

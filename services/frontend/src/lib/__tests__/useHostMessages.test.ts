@@ -1,61 +1,56 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderHook } from "@testing-library/react";
 import { useHostMessages } from "../useHostMessages";
-import type {
-  FeedbackMeta,
-  ScoreboardEntry,
-} from "../useRoomGameTypes";
+import type { FeedbackMeta, ScoreboardEntry } from "../useRoomGameTypes";
 
 // ── Shared mock t function ────────────────────────────────────────────────
 
-const mockT = vi.fn(
-  (key: string, params?: Record<string, unknown>) => {
-    switch (key) {
-      case "host.pre.solo":
-        return "Ready for solo training?";
-      case "host.pre.welcome":
-        return "Welcome to the quiz!";
-      case "host.question.default":
-        return `Question ${params?.index}`;
-      case "host.question.easy":
-        return `Easy Q${params?.index}`;
-      case "host.question.hard":
-        return `Hard Q${params?.index}`;
-      case "host.feedback.timeout":
-        return "Time expired!";
-      case "host.feedback.correct":
-        return "Correct answer!";
-      case "host.feedback.correct_hard":
-        return "Correct hard!";
-      case "host.feedback.first_correct":
-        return "First correct!";
-      case "host.feedback.only_correct":
-        return "Only correct!";
-      case "host.feedback.wrong":
-        return "Wrong answer!";
-      case "host.feedback.only_wrong":
-        return "Only wrong!";
-      case "host.end.winner":
-        return `Winner ${params?.score}`;
-      case "host.end.second":
-        return params?.score != null ? `End ${params?.score}` : "End";
-      case "host.end.third":
-        return params?.score != null ? `End ${params?.score}` : "End";
-      case "host.end.last":
-        return params?.score != null ? `End ${params?.score}` : "End";
-      case "host.end.low":
-        return "Low score";
-      case "host.end.default":
-        return params?.score != null ? `End ${params?.score}` : "End";
-      case "host.end.perfect":
-        return "Perfect score!";
-      case "room.easter_egg":
-        return "Easter egg!";
-      default:
-        return key;
-    }
-  },
-);
+const mockT = vi.fn((key: string, params?: Record<string, unknown>) => {
+  switch (key) {
+    case "host.pre.solo":
+      return "Ready for solo training?";
+    case "host.pre.welcome":
+      return "Welcome to the quiz!";
+    case "host.question.default":
+      return `Question ${params?.index}`;
+    case "host.question.easy":
+      return `Easy Q${params?.index}`;
+    case "host.question.hard":
+      return `Hard Q${params?.index}`;
+    case "host.feedback.timeout":
+      return "Time expired!";
+    case "host.feedback.correct":
+      return "Correct answer!";
+    case "host.feedback.correct_hard":
+      return "Correct hard!";
+    case "host.feedback.first_correct":
+      return "First correct!";
+    case "host.feedback.only_correct":
+      return "Only correct!";
+    case "host.feedback.wrong":
+      return "Wrong answer!";
+    case "host.feedback.only_wrong":
+      return "Only wrong!";
+    case "host.end.winner":
+      return `Winner ${params?.score}`;
+    case "host.end.second":
+      return params?.score != null ? `End ${params?.score}` : "End";
+    case "host.end.third":
+      return params?.score != null ? `End ${params?.score}` : "End";
+    case "host.end.last":
+      return params?.score != null ? `End ${params?.score}` : "End";
+    case "host.end.low":
+      return "Low score";
+    case "host.end.default":
+      return params?.score != null ? `End ${params?.score}` : "End";
+    case "host.end.perfect":
+      return "Perfect score!";
+    case "room.easter_egg":
+      return "Easter egg!";
+    default:
+      return key;
+  }
+});
 
 // ── Mocks ─────────────────────────────────────────────────────────────────
 
@@ -80,9 +75,7 @@ vi.mock("../PhrasesProvider", () => ({
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 
-function feedbackMeta(
-  overrides: Partial<FeedbackMeta> = {},
-): FeedbackMeta {
+function feedbackMeta(overrides: Partial<FeedbackMeta> = {}): FeedbackMeta {
   return {
     correct: false,
     onlyCorrect: false,

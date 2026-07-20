@@ -11,7 +11,8 @@ interface HostBubbleProps {
 }
 
 const variantBase = {
-  default: "bg-white/95 dark:bg-gray-900/95 text-gray-900 dark:text-gray-100 border-tv-red/40",
+  default:
+    "bg-white/95 dark:bg-gray-900/95 text-gray-900 dark:text-gray-100 border-tv-red/40",
   success:
     "bg-green-50/95 dark:bg-green-900/80 text-green-900 dark:text-green-100",
   error: "bg-red-50/95 dark:bg-red-900/80 text-red-900 dark:text-red-100",

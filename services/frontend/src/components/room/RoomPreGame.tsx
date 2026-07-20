@@ -38,9 +38,7 @@ export default function RoomPreGame({
   const { user } = useAuth();
 
   const roomCode =
-    room?.code ||
-    (location.state as { code?: string } | null)?.code ||
-    "";
+    room?.code || (location.state as { code?: string } | null)?.code || "";
   const shareUrl = `${window.location.origin}/?code=${room?.code ?? ""}`;
 
   return (

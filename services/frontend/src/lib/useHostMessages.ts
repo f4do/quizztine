@@ -139,7 +139,8 @@ export function useHostMessages({
         score: feedbackMeta.score ?? 0,
       };
       if (feedbackMeta.streak) wrongParams.streak = feedbackMeta.streak;
-      if (roomMode !== "solo" && feedbackMeta.onlyWrong) contexts.push("feedback.only_wrong");
+      if (roomMode !== "solo" && feedbackMeta.onlyWrong)
+        contexts.push("feedback.only_wrong");
       if (feedbackMeta.streak && feedbackMeta.streak > 0)
         contexts.push("feedback.streak_lost");
       contexts.push("feedback.wrong"); // generic fallback
@@ -168,7 +169,10 @@ export function useHostMessages({
         params.pseudo = playerPseudo ?? "";
         params.total = feedbackMeta.totalQuestions ?? 0;
         params.correct_count = feedbackMeta.correctCount ?? 0;
-        params.rank = (feedbackMeta.rank ?? scoreboard.findIndex(s => s.player_id === playerId) + 1) || 1;
+        params.rank =
+          (feedbackMeta.rank ??
+            scoreboard.findIndex((s) => s.player_id === playerId) + 1) ||
+          1;
 
         const contexts: string[] = [];
 

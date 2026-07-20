@@ -1,11 +1,7 @@
 import Avatar from "@vierweb/avataaars";
 
 export type HostExpression =
-  | "smile"
-  | "focused"
-  | "surprised"
-  | "applause"
-  | "console";
+  "smile" | "focused" | "surprised" | "applause" | "console";
 
 export interface AvatarConfig {
   topType: string;

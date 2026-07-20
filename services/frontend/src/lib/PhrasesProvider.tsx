@@ -49,36 +49,36 @@ const STALE_MS = 5 * 60 * 1000; // 5 minutes
 /** Intrinsic weight per context — higher = more likely to be chosen
  *  when multiple contexts match. Set once in code, no admin config needed. */
 const CONTEXT_WEIGHTS: Record<string, number> = {
-  "feedback.streak_10":          80,
-  "feedback.streak_5":           60,
-  "feedback.streak_3":           40,
+  "feedback.streak_10": 80,
+  "feedback.streak_5": 60,
+  "feedback.streak_3": 40,
   "feedback.correct_first_only": 35,
-  "feedback.only_correct":       25,
-  "feedback.first_correct":      20,
-  "feedback.correct_hard":       15,
-  "feedback.correct":             5,
-  "feedback.only_wrong":         25,
-  "feedback.streak_lost":        20,
-  "feedback.wrong":               5,
-  "feedback.timeout":             5,
-  "game.first":                  30,
-  "game.last":                   30,
-  "game.media_audio":            20,
-  "game.media_video":            20,
-  "question.hard":               15,
-  "question.easy":               10,
-  "question.default":             5,
-  "end.perfect":                 80,
-  "end.winner":                  60,
-  "end.second":                  30,
-  "end.third":                   20,
-  "end.tie":                     15,
-  "end.last":                    10,
-  "end.low":                      8,
-  "end.default":                  3,
-  "pre.solo":                    10,
-  "pre.welcome":                 10,
-  "ready.replay":                10,
+  "feedback.only_correct": 25,
+  "feedback.first_correct": 20,
+  "feedback.correct_hard": 15,
+  "feedback.correct": 5,
+  "feedback.only_wrong": 25,
+  "feedback.streak_lost": 20,
+  "feedback.wrong": 5,
+  "feedback.timeout": 5,
+  "game.first": 30,
+  "game.last": 30,
+  "game.media_audio": 20,
+  "game.media_video": 20,
+  "question.hard": 15,
+  "question.easy": 10,
+  "question.default": 5,
+  "end.perfect": 80,
+  "end.winner": 60,
+  "end.second": 30,
+  "end.third": 20,
+  "end.tie": 15,
+  "end.last": 10,
+  "end.low": 8,
+  "end.default": 3,
+  "pre.solo": 10,
+  "pre.welcome": 10,
+  "ready.replay": 10,
 };
 
 /** Default weight when a context is not in the map */
@@ -192,10 +192,7 @@ export function PhrasesProvider({ children }: { children: ReactNode }) {
 
   /** Get a random phrase for the given context, falling back to i18n. */
   const getPhrase = useCallback(
-    (
-      context: string,
-      params?: Record<string, string | number>,
-    ): string => {
+    (context: string, params?: Record<string, string | number>): string => {
       const lang = i18n.language || "fr";
       const key = `${context}:${lang}`;
       const entries = phraseMap[key];
@@ -220,10 +217,7 @@ export function PhrasesProvider({ children }: { children: ReactNode }) {
    * Falls back to i18n using the first context if nothing is cached.
    */
   const getPhraseByPriority = useCallback(
-    (
-      contexts: string[],
-      params?: Record<string, string | number>,
-    ): string => {
+    (contexts: string[], params?: Record<string, string | number>): string => {
       const lang = i18n.language || "fr";
 
       // Collect matching contexts with their weights
@@ -241,10 +235,7 @@ export function PhrasesProvider({ children }: { children: ReactNode }) {
 
       if (candidates.length > 0) {
         // Weighted random selection
-        const totalWeight = candidates.reduce(
-          (sum, c) => sum + c.weight,
-          0,
-        );
+        const totalWeight = candidates.reduce((sum, c) => sum + c.weight, 0);
         let r = Math.random() * totalWeight;
         for (const candidate of candidates) {
           r -= candidate.weight;
@@ -294,9 +285,7 @@ export function PhrasesProvider({ children }: { children: ReactNode }) {
   );
 
   return (
-    <PhrasesContext.Provider value={value}>
-      {children}
-    </PhrasesContext.Provider>
+    <PhrasesContext.Provider value={value}>{children}</PhrasesContext.Provider>
   );
 }
 
@@ -304,7 +293,6 @@ export function PhrasesProvider({ children }: { children: ReactNode }) {
 
 export function usePhrases(): PhrasesContextValue {
   const ctx = useContext(PhrasesContext);
-  if (!ctx)
-    throw new Error("usePhrases must be used within a PhrasesProvider");
+  if (!ctx) throw new Error("usePhrases must be used within a PhrasesProvider");
   return ctx;
 }

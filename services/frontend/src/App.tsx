@@ -25,49 +25,52 @@ export default function App() {
     <ThemeProvider>
       <AuthProvider>
         <PhrasesProvider>
-        <Routes>
-          <Route path="/" element={<HomePage />} />
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/register" element={<RegisterPage />} />
-          <Route path="/room/create" element={<RoomCreatePage />} />
-          <Route path="/room/:id" element={<RoomPage />} />
-          <Route
-            path="/train"
-            element={
-              <ProtectedRoute>
-                <TrainPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/profile"
-            element={
-              <ProtectedRoute>
-                <ProfilePage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/admin"
-            element={
-              <AdminRoute>
-                <AdminLayout />
-              </AdminRoute>
-            }
-          >
-            <Route index element={<AdminDashboardPage />} />
-            <Route path="questions" element={<AdminQuestionsPage />} />
-            <Route path="questions/new" element={<AdminQuestionCreatePage />} />
+          <Routes>
+            <Route path="/" element={<HomePage />} />
+            <Route path="/login" element={<LoginPage />} />
+            <Route path="/register" element={<RegisterPage />} />
+            <Route path="/room/create" element={<RoomCreatePage />} />
+            <Route path="/room/:id" element={<RoomPage />} />
             <Route
-              path="questions/:id/edit"
-              element={<AdminQuestionEditPage />}
+              path="/train"
+              element={
+                <ProtectedRoute>
+                  <TrainPage />
+                </ProtectedRoute>
+              }
             />
-            <Route path="users" element={<AdminUsersPage />} />
-            <Route path="categories" element={<AdminCategoriesPage />} />
-            <Route path="hosts" element={<AdminHostsPage />} />
-          </Route>
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
+            <Route
+              path="/profile"
+              element={
+                <ProtectedRoute>
+                  <ProfilePage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin"
+              element={
+                <AdminRoute>
+                  <AdminLayout />
+                </AdminRoute>
+              }
+            >
+              <Route index element={<AdminDashboardPage />} />
+              <Route path="questions" element={<AdminQuestionsPage />} />
+              <Route
+                path="questions/new"
+                element={<AdminQuestionCreatePage />}
+              />
+              <Route
+                path="questions/:id/edit"
+                element={<AdminQuestionEditPage />}
+              />
+              <Route path="users" element={<AdminUsersPage />} />
+              <Route path="categories" element={<AdminCategoriesPage />} />
+              <Route path="hosts" element={<AdminHostsPage />} />
+            </Route>
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
         </PhrasesProvider>
       </AuthProvider>
     </ThemeProvider>

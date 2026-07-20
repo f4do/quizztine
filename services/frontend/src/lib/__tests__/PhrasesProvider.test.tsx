@@ -12,8 +12,7 @@ const mockT = vi.fn((key: string, _params?: Record<string, unknown>) => {
   const map: Record<string, string> = {
     "host.feedback.correct": "Bonne réponse depuis i18n !",
     "host.feedback.wrong": "Mauvaise réponse...",
-    "host.feedback.only_correct":
-      "Vous êtes le seul à avoir trouvé celle-ci !",
+    "host.feedback.only_correct": "Vous êtes le seul à avoir trouvé celle-ci !",
   };
   return map[key] ?? key;
 });
@@ -51,10 +50,7 @@ describe("PhrasesProvider", () => {
 
     const phrase = result.current.getPhrase("feedback.correct");
     expect(phrase).toBe("Bonne réponse depuis i18n !");
-    expect(mockT).toHaveBeenCalledWith(
-      "host.feedback.correct",
-      undefined,
-    );
+    expect(mockT).toHaveBeenCalledWith("host.feedback.correct", undefined);
   });
 
   it("passes interpolation params to i18n fallback", () => {
@@ -80,10 +76,7 @@ describe("PhrasesProvider", () => {
       "feedback.correct",
     ]);
     expect(phrase).toBe("Vous êtes le seul à avoir trouvé celle-ci !");
-    expect(mockT).toHaveBeenCalledWith(
-      "host.feedback.only_correct",
-      undefined,
-    );
+    expect(mockT).toHaveBeenCalledWith("host.feedback.only_correct", undefined);
   });
 
   it("returns empty string from default context when no contexts provided to getPhraseByPriority", () => {

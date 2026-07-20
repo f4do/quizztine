@@ -35,18 +35,22 @@ export default function HostAvatar({
   const spot = avatarConfig?.spotColor;
 
   function renderSpotBg(className = "") {
-      if (spot) {
-        return (
-          <div
-            className={`absolute inset-0 rounded-full animate-float ${className}`}
-            style={{
-              background: `linear-gradient(135deg, ${spot}, ${spot}dd, ${spot})`,
-              boxShadow: `0 4px 20px ${spot}66`,
-            }}
-          />
-        );
-      }
-    return <div className={`absolute inset-0 rounded-full bg-gradient-to-br from-tv-gold via-yellow-300 to-tv-gold-dark shadow-lg animate-float ${className}`} />;
+    if (spot) {
+      return (
+        <div
+          className={`absolute inset-0 rounded-full animate-float ${className}`}
+          style={{
+            background: `linear-gradient(135deg, ${spot}, ${spot}dd, ${spot})`,
+            boxShadow: `0 4px 20px ${spot}66`,
+          }}
+        />
+      );
+    }
+    return (
+      <div
+        className={`absolute inset-0 rounded-full bg-gradient-to-br from-tv-gold via-yellow-300 to-tv-gold-dark shadow-lg animate-float ${className}`}
+      />
+    );
   }
 
   // Non-builtin avatars: static image, expressions don't apply
@@ -81,11 +85,7 @@ export default function HostAvatar({
   return (
     <div className={`relative shrink-0 ${sizes[size]} ${className}`}>
       {renderSpotBg()}
-      <AvatarRenderer
-        config={avatarConfig}
-        expression={expression}
-        size={px}
-      />
+      <AvatarRenderer config={avatarConfig} expression={expression} size={px} />
       {/* TV sparkle */}
       <div
         className="absolute -top-1 -right-1 w-4 h-4 rounded-full blur-[2px] opacity-80"

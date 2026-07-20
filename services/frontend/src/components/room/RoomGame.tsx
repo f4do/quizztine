@@ -107,7 +107,9 @@ export default function RoomGame({
             {t("room.question")} {questionIndex + 1}
           </span>
           {questionDifficulty && difficultyLabel && (
-            <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${difficultyColor}`}>
+            <span
+              className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${difficultyColor}`}
+            >
               {difficultyLabel}
             </span>
           )}

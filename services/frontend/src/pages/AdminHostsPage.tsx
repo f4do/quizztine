@@ -336,7 +336,17 @@ const VARIABLE_DESCRIPTIONS: Record<string, string> = {
 
 /** Derive scope from context key */
 function getScopeFromContext(ctx: string): string {
-  return ctx.startsWith("site.") || ctx.startsWith("home.") || ctx.startsWith("login.") || ctx.startsWith("register.") || ctx.startsWith("room_create.") || ctx.startsWith("profile.") || ctx.startsWith("train.") || ctx.startsWith("admin.") || ctx.startsWith("error.") ? "site" : "game";
+  return ctx.startsWith("site.") ||
+    ctx.startsWith("home.") ||
+    ctx.startsWith("login.") ||
+    ctx.startsWith("register.") ||
+    ctx.startsWith("room_create.") ||
+    ctx.startsWith("profile.") ||
+    ctx.startsWith("train.") ||
+    ctx.startsWith("admin.") ||
+    ctx.startsWith("error.")
+    ? "site"
+    : "game";
 }
 
 /** Context → template variables available for interpolation */
@@ -422,9 +432,12 @@ export default function AdminHostsPage() {
   const [phraseSuccess, setPhraseSuccess] = useState("");
   const [contextGroups, setContextGroups] = useState<ContextGroup[]>([]);
 
-  const [phraseModal, setPhraseModal] = useState<"create" | "edit" | null>(null);
+  const [phraseModal, setPhraseModal] = useState<"create" | "edit" | null>(
+    null,
+  );
   const [phraseEditing, setPhraseEditing] = useState<Phrase | null>(null);
-  const [phraseForm, setPhraseForm] = useState<PhraseFormState>(EMPTY_PHRASE_FORM);
+  const [phraseForm, setPhraseForm] =
+    useState<PhraseFormState>(EMPTY_PHRASE_FORM);
   const [phraseSaving, setPhraseSaving] = useState(false);
 
   // Filters
@@ -641,7 +654,10 @@ export default function AdminHostsPage() {
 
   const loadContextGroups = async () => {
     try {
-      const d = (await api("/host/phrases/contexts")) as Record<string, unknown>;
+      const d = (await api("/host/phrases/contexts")) as Record<
+        string,
+        unknown
+      >;
       // Backend returns { contexts: { pre: [...], game: [...], ... }, variables: {...} }
       // Transform into ContextGroup[] for the dropdown
       const raw = d.contexts as Record<string, string[]>;
@@ -785,7 +801,7 @@ export default function AdminHostsPage() {
 
     // Determine which languages to use for defaults
     const defaultLangs = !langFilter
-      ? ["fr", "en"]  // no filter → show both languages
+      ? ["fr", "en"] // no filter → show both languages
       : [langFilter]; // specific language filter
 
     // Add defaults for contexts without custom phrases, respecting active filters
@@ -793,7 +809,18 @@ export default function AdminHostsPage() {
       for (const ctx of group.contexts) {
         // Skip if a custom phrase already exists for this exact context+lang
         if (contextFilter && ctx !== contextFilter) continue;
-        const scope = ctx.startsWith("site.") || ctx.startsWith("home.") || ctx.startsWith("login.") || ctx.startsWith("register.") || ctx.startsWith("room_create.") || ctx.startsWith("profile.") || ctx.startsWith("train.") || ctx.startsWith("admin.") || ctx.startsWith("error.") ? "site" : "game";
+        const scope =
+          ctx.startsWith("site.") ||
+          ctx.startsWith("home.") ||
+          ctx.startsWith("login.") ||
+          ctx.startsWith("register.") ||
+          ctx.startsWith("room_create.") ||
+          ctx.startsWith("profile.") ||
+          ctx.startsWith("train.") ||
+          ctx.startsWith("admin.") ||
+          ctx.startsWith("error.")
+            ? "site"
+            : "game";
         if (scopeFilter && scope !== scopeFilter) continue;
 
         for (const lang of defaultLangs) {
@@ -809,10 +836,14 @@ export default function AdminHostsPage() {
           );
           if (alreadyAdded) continue;
 
-          const tf = lang === "fr" && langFilter ? i18n.getFixedT("fr")
-            : lang === "en" && langFilter ? i18n.getFixedT("en")
-            : lang === "en" ? i18n.getFixedT("en")
-            : t;
+          const tf =
+            lang === "fr" && langFilter
+              ? i18n.getFixedT("fr")
+              : lang === "en" && langFilter
+                ? i18n.getFixedT("en")
+                : lang === "en"
+                  ? i18n.getFixedT("en")
+                  : t;
           const defaultText = tf(`host.${ctx}`);
           if (defaultText && !defaultText.startsWith("host.")) {
             entries.push({
@@ -852,7 +883,7 @@ export default function AdminHostsPage() {
     .filter((g) => g.options.length > 0);
 
   const selectedContextVars = phraseForm.context
-    ? CONTEXT_VARIABLES[phraseForm.context] ?? []
+    ? (CONTEXT_VARIABLES[phraseForm.context] ?? [])
     : [];
 
   return (
@@ -1009,12 +1040,19 @@ export default function AdminHostsPage() {
                     onChange={(e) =>
                       setForm({
                         ...form,
-                        avatarType: e.target.value as HostFormState["avatarType"],
+                        avatarType: e.target
+                          .value as HostFormState["avatarType"],
                       })
                     }
                     options={[
-                      { value: "BUILTIN", label: t("admin.hosts.avatar_builtin") },
-                      { value: "URL", label: t("admin.hosts.avatar_url_label") },
+                      {
+                        value: "BUILTIN",
+                        label: t("admin.hosts.avatar_builtin"),
+                      },
+                      {
+                        value: "URL",
+                        label: t("admin.hosts.avatar_url_label"),
+                      },
                     ]}
                   />
 
@@ -1162,7 +1200,9 @@ export default function AdminHostsPage() {
                       label="Couleur du spot"
                       value={form.avatarConfig.spotColor ?? ""}
                       options={SPOT_COLORS}
-                      onChange={(v) => updateConfig("spotColor", v || undefined)}
+                      onChange={(v) =>
+                        updateConfig("spotColor", v || undefined)
+                      }
                     />
                   </div>
 
@@ -1325,7 +1365,9 @@ export default function AdminHostsPage() {
                         </>
                       )}
                     </div>
-                    <p className={`mt-1 text-sm ${p.isDefault ? "text-gray-500 dark:text-gray-400 italic" : "text-gray-800 dark:text-gray-200"}`}>
+                    <p
+                      className={`mt-1 text-sm ${p.isDefault ? "text-gray-500 dark:text-gray-400 italic" : "text-gray-800 dark:text-gray-200"}`}
+                    >
                       {p.text}
                     </p>
                   </div>
@@ -1341,7 +1383,9 @@ export default function AdminHostsPage() {
                       </Button>
                       <Button
                         variant="ghost"
-                        onClick={() => confirmDeletePhrase(p as unknown as Phrase)}
+                        onClick={() =>
+                          confirmDeletePhrase(p as unknown as Phrase)
+                        }
                         className="rounded-xl !p-2 !px-3 text-sm text-red-600 hover:text-red-700"
                         title={t("admin.hosts.delete")}
                       >
@@ -1366,7 +1410,8 @@ export default function AdminHostsPage() {
                 ←
               </Button>
               <span className="text-sm font-medium text-gray-600 dark:text-gray-400">
-                {t("admin.hosts.phrases_page")} {phrasePage} / {totalPhrasePages}
+                {t("admin.hosts.phrases_page")} {phrasePage} /{" "}
+                {totalPhrasePages}
               </span>
               <Button
                 variant="ghost"
@@ -1407,7 +1452,9 @@ export default function AdminHostsPage() {
                         setPhraseForm({
                           ...phraseForm,
                           context: e.target.value,
-                          scope: e.target.value ? getScopeFromContext(e.target.value) : "game",
+                          scope: e.target.value
+                            ? getScopeFromContext(e.target.value)
+                            : "game",
                         })
                       }
                       required
@@ -1417,7 +1464,10 @@ export default function AdminHostsPage() {
                         — {t("admin.hosts.phrases_context")} —
                       </option>
                       {contextGroups.map((g) => (
-                        <optgroup key={g.category} label={CATEGORY_LABELS[g.category] ?? g.category}>
+                        <optgroup
+                          key={g.category}
+                          label={CATEGORY_LABELS[g.category] ?? g.category}
+                        >
                           {g.contexts.map((c) => (
                             <option key={c} value={c}>
                               {CONTEXT_LABELS[c] ?? c}
@@ -1499,7 +1549,9 @@ export default function AdminHostsPage() {
                             title={VARIABLE_DESCRIPTIONS[v] ?? v}
                             className="inline-flex items-center gap-1 font-mono text-[11px] bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300 px-1.5 py-0.5 rounded border border-amber-200 dark:border-amber-700"
                           >
-                            {'{{'}{v}{'}}'}
+                            {"{{"}
+                            {v}
+                            {"}}"}
                           </span>
                         ))}
                       </div>
