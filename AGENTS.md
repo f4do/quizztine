@@ -1,391 +1,417 @@
-# Quizztine
+# Quizztine — Technical notes
 
-Containerized quiz app with 3 services.
+> **Maintain this file when making architectural changes.**
+> Keep sections accurate: architecture, directory layout, HTTP contracts, patterns, and version matrix.
 
-## Architecture
+## Architecture (current)
 
-| Service | Tech | Public endpoint | Role |
-|---|---|---|---|
-| `services/web-backend/` | Node.js + Express + TypeScript | — (API REST) | Auth'd users manage questions stored in external Postgres via Prisma |
-| `services/frontend/` | React + Vite + TypeScript | `/`, `/room/create`, `/room/:id`, `/admin/*` | Create/join quiz rooms (solo or multiplayer); admin dashboard for quizmaster+ |
-| `services/quiz-engine/` | Python + FastAPI | — (internal) | Room logic, question picking, quiz flow |
-
-Data flow: Frontend → Web backend → Quiz engine (internal).
-
-## Stack detail
-
-- **Web backend**: Express + TypeScript, Prisma 7 (Postgres, via `@prisma/adapter-pg`), JWT auth (httpOnly cookie + refresh via `jose`), Zod validation, Vitest tests (unit + integration). Structure: routes/controllers/middleware. WebSocket (Socket.IO) for multiplayer relayed to quiz-engine via internal HTTP.
-- **Frontend**: React + Vite + React Router + Tailwind CSS + native `fetch` + Socket.IO client. UI inspirée d'un jeu TV de culture générale animé par **Christine** (présentatrice virtuelle). Tests: Vitest + React Testing Library (unit), e2e planned later.
-- **Quiz engine**: FastAPI + pytest + ruff + mypy + httpx/httpx2. Tests: unit + integration.
-
-### Backend specifics
-
-**Auth**: pseudo + email + password (12+ chars, no complexity, hashé via \`bcrypt\` natif). JWT access token (1h) + refresh token (7d) signés avec `jose` (HS256), both httpOnly cookies. Les fonctions JWT (`signAccessToken`, `signRefreshToken`, `verifyToken`) sont asynchrones. Email verification via confirmation link on registration. TOTP mandatory for quizmaster/admin, optional for user. TOTP recovery: admin reset only. Logout clears cookies server-side and blacklists refresh token.
-
-**Rate limiting**:
-- Auth endpoints (`/auth/login`, `/auth/register`) : 10 req / 15 min par IP (`express-rate-limit`)
-- Global API : 100 req / 15 min par IP (désactivé par défaut, activable dans `app.ts`)
-- Réponse structurée : `{ error, code, status, details }` avec code `RATE_LIMIT_EXCEEDED`
-
-**Sécurité des cookies** : le flag `secure` des cookies JWT est configuré automatiquement selon `NODE_ENV` — `true` en production, `false` en développement.
-
-**JWT secret** : la variable d'environnement `JWT_SECRET` est **obligatoire en production**. Le démarrage échoue immédiatement si elle est absente. En développement, une valeur par défaut est utilisée via `.env`.
-
-**Refresh token blacklist** : les refresh tokens révoqués sont stockés en base de données (table `RevokedToken`) avec hash SHA-256 et expiration automatique (7 jours). Une purge automatique nettoie les entrées expirées toutes les heures. Ce mécanisme est persistant (survit aux redémarrages) et scalable (multi-instance compatible).
-
-**Login**: accepts `login` field (email or pseudo). Frontend sends `{ login, password }`, label shows "Email or pseudo". Rate limité à 10 req / 15 min par IP.
-
-**Roles** (hierarchical, managed by admin):
-- `user` — free registration (valid email + verification required). Reserves a nickname, sees own stats (games, scores, % success by theme). Solo training sessions on weak themes (`/train`).
-- `quizmaster` — everything from `user` + can add public/private questions + full management of own private questions. Promotion via invite link (if user exists, the link adds rights) or admin checkbox.
-- `quizadmin` — everything from `quizmaster` + management of all questions + user management.
-
-**Question model**: text + optional uploaded media (audio/video/image), multiple choices (2-4, 1 or more correct — answer is correct only if ALL correct choices are selected; checkboxes for multiple correct, radio for single correct), explanation, sourceUrl, category (predefined list, admin can add), difficulty (easy/medium/hard), visibility (public/private), questionType (MCQ — extensible pour d'autres types). Private questions visible only by their author and quizadmins.
-
-**Private questions in room creation**: if the connected user is quizmaster+, a toggle "Include my private questions" appears. The web-backend filters questions by visibility and role, then sends eligible IDs + correct choice indices to the quiz-engine.
-
-**Error reporting**: "Report error" button under each question (during or after quiz). Modal with textarea (reason). Anti-abuse:
-  - Non-auth: IP rate limit (3/h) + CAPTCHA
-  - User: global rate limit (10/h, rolling 1h window)
-  - Quizmaster+: no limit
-Stored in web-backend (`QuestionReport` table).
-
-**Upload media**: via web-backend (`POST /upload`). Files stored on local filesystem (`uploads/`).
-  - **Extensions autorisées** : `.jpg`, `.jpeg`, `.png`, `.gif`, `.webp`, `.mp3`, `.wav`, `.ogg`, `.mp4` (validé côté middleware)
-  - **Filename** : UUID généré côté serveur via `crypto.randomUUID()` (prévention path traversal)
-  - **Audio**: recorded in browser → cut/compress → preview for validation → upload if duration ≤ 10s and size ≤ 5 MB
-  - **Image**: simple upload, max 10 MB
-  - **Video**: not yet
-
-**Score**:
-  - Correct answer: 10 pts (easy), 15 (medium), 20 (hard)
-  - Multi 3+ players: bonus "first to answer right" (client timestamp + ping correction) + bonus "only one answered right"
-  - Multi 2 players: difficulty points only, no bonus
-  - Solo: base points + streak bonus (visual reward + points)
-  - Streak: displayed + visual reward + small point bonus
-  - Wrong answer: 0 points (no penalty; future game modes may add penalties)
-  - Tiebreaker: cumulative response time (displayed on scoreboard). Easter egg if all players have 0 points.
-  - Modular architecture to support future game modes.
-
-**Multiplayer synchronization**: all active players see the same question. The round ends once every active player has answered or the timer has expired. The correction is then shown to everyone for 5 seconds, after which the next question is fetched automatically. Solo behaves the same way (auto-advance after feedback).
-
-**Timer expired**: counted as wrong, "Time's up" screen with correction displayed, then next question.
-
-**Quiz-engine down**: short timeout on HTTP call → 503 error with "Service temporarily unavailable".
-
-**Quiz-engine notifications**: engine → backend HTTP callbacks (`question-finished`, `next-question`, `game-finished`, `results`) incluent un retry avec exponential backoff (3 tentatives, 1s/2s/4s) pour résister aux indisponibilités temporaires du backend.
-
-**Race condition answer/timeout**: Quand le `_deadline_task` du moteur finit le round avant que la réponse HTTP du frontend n'arrive, le endpoint `POST /answer` retourne un résultat timeout (200 OK) au lieu d'une erreur 400. Voir `routes.py:submit_answer` — le check `feedback_until is not None` renvoie `AnswerResponse(correct=False, points=0)` au lieu de `ROUND_FINISHED`.
-
-### Frontend game flow specifics
-
-**Solo game flow** :
-- Le timer expiré ou le clic "Valider" passe immédiatement la phase en `feedback` (local, sans attendre le serveur)
-- Les choix s'affichent en vert/rouge via `getChoiceStyle()` — le frontend connaît les bonnes réponses depuis `fetchQuestion()` qui charge `choiceCorrect`
-- Le `question-feedback` (socket) met à jour le score et démarre le countdown 5s
-- Le `next-question` (socket) charge la question suivante
-- Fallback de sécurité : si `next-question` n'arrive pas après 12s en phase `feedback`, `fetchQuestion()` est forcé
-
-**CircularTimer** : animation fluide via `requestAnimationFrame` (~60fps). S'arrête et affiche un checkmark quand `stopped={true}` (hasAnswered). Dégradé vert→orange→rouge avec seuils à 10s et 5s.
-
-**FeedbackBanner** : notification coulissante au-dessus de la question. Slide-in animé. Affiche résultat, points, bonus, streak, barre de progression du countdown.
-
-**Race condition gérée** : quand le frontend soumet une réponse (ou timeout) et que le `_deadline_task` du moteur a déjà fini le round, le `answer-error` du socket est ignoré si déjà en phase `feedback`.
-
-**Layout boutons Login/Register** : `grid-cols-2 min-w-[210px]` — les boutons gardent une largeur stable entre les langues.
-
-**Prisma ORM** : Prisma 7 (`prisma-client` generator, plus `prisma-client-js`). Points clés :
-- **Config** : `prisma.config.ts` à la racine du service (fichier explicitement copié dans Docker). Utilise `defineConfig` de `prisma/config`. Ne pas mettre de config prisma dans `package.json`.
-- **Schema** : le `datasource` ne contient plus `url` — la connexion est configurée dans `prisma.config.ts` et dans `PrismaClient` via l'adapter.
-- **Driver adapter** : `@prisma/adapter-pg` obligatoire. `new PrismaClient({ adapter })` — plus de constructeur sans options.
-- **Generateur** : `provider = "prisma-client"` avec `output = "./generated/prisma"`. Le client est généré dans `prisma/generated/prisma/` (gitignoré).
-- **Imports** : remplacent `@prisma/client` par le chemin relatif vers `prisma/generated/prisma/client.js`. Le fichier `client.ts` exporte tout (PrismaClient, Prisma namespace, enums, model types) via `export * from "./enums"`.
-- **Génération** : `prisma generate` ne nécessite pas de DATABASE_URL (pas de connexion réelle).
-- **Seed** : doit aussi utiliser `PrismaPg` adapter — `new PrismaClient({ adapter })`.
-- **Migration Prisma 6→7** réalisée. Breaking changes : driver adapter obligatoire, imports changés, schema sans url, plus de middleware `$use`.
-
-**Types de questions extensibles** : le champ `questionType` (enum `MCQ`) discrimine le type de question. Le quiz-engine utilise un pattern `AnswerValidator` (Strategy) pour valider les réponses selon le type. Ajouter un nouveau type de question implique :
-1. Ajouter la valeur dans l'enum `QuestionType` (Prisma + Engine)
-2. Implémenter un `AnswerValidator` (Engine)
-3. L'enregistrer dans le registry `VALIDATORS`
-
-### Quiz-engine architecture patterns
-
-**GameFlow strategy** (`src/game_flow.py`) : la boucle de jeu est extraite dans une classe `GameFlow` abstraite. L'implémentation `ClassicFlow` gère le flow standard (round fini quand tous ont répondu ou timer expire). Pour ajouter un mode de jeu (duel, battle royale, marathon) :
-1. Créer une sous-classe de `GameFlow`
-2. Surcharger `should_finish_round()` et `should_eliminate()`
-3. Optionnellement surcharger `on_answer()`, `finish_round()`, `advance_question()`
-
-**ScoreResult** (`src/scoring.py`) : le calcul de score retourne un `ScoreResult` dataclass (`total`, `bonus`, `new_streak`) au lieu d'un tuple. Le `ScoreCalculator` utilise des protocols injectables (`BonusCalculator`, `StreakCalculator`) pour les bonus multi, solo, streak. Ajouter un nouveau système de score (malus, multiplicateur, wager) implique :
-1. Ajouter le champ dans `ScoreResult`
-2. Implémenter le calcul dans un `BonusCalculator` ou `StreakCalculator`
-3. L'injecter dans `ScoreCalculator`
-
-**AnswerValidator** (`src/answer_validator.py`) : pattern Strategy pour valider les réponses selon le type de question. `MCQValidator` implémente la validation ensembliste (tous les bons choix sélectionnés, pas d'extra). Registry `VALIDATORS` pour associer un type à son validateur.
-
-## HTTP contract: web-backend ↔ quiz-engine
-
-All calls are internal (backend → engine), no auth needed between services.
-
-### Backend → Engine
+Single container (mono-container). Express serves both the REST API + Socket.IO and the built frontend static files.
 
 ```
-POST /rooms                    # Create a room
-{
-  questions: [{ id: number, correctChoices: number[], difficulty: "easy" | "medium" | "hard", questionType: "MCQ" }],
-  mode: "solo" | "multi_private" | "multi_public",
-  timer: number,               # seconds
-  id: string,                  # optional, reused from backend DB
-  code: string,                # optional, room code for display
-  creator_player_id: string    # optional, marks the room creator
-}
-
-POST /rooms/:id/join           # Player joins
-{ player_id: string, nickname: string }
-# 200 OK on success
-# 409 NICKNAME_TAKEN if nickname already in room (non-disconnected)
-
-POST /rooms/:id/start?player_id=xxx   # Start the game
-# 200 if creator (or if solo — no creator_player_id set)
-# 403 NOT_CREATOR if wrong player tries to start
-
-GET  /rooms/:id
-# Returns: { id, code, mode, timer, status, player_count, current_question_index, players: [{ id, nickname, score, streak, cumulativeTime, disconnected, answered }] }
-
-GET  /rooms/:id/current-question/:playerId
-# Returns: { questionId: number, index: number }
-
-POST /rooms/:id/answer/:playerId
-{ questionId: number, selectedChoices: number[], clientTimestamp: number }
-# Returns provisional score: { correct: boolean, points: number, bonus: number, streak: number, cumulativeTime: number }
-# Final scoring (including multiplayer bonuses) is computed once the round ends.
-
-GET  /rooms/:id/scoreboard
-# Returns: [{ playerId, nickname, score, streak, cumulativeTime }]
+Browser (React SPA) → Express (API + Socket.IO) → in-process game engine → Postgres
+                   → Express (serves frontend static files)
 ```
 
-### Engine → Backend
+### Services
 
-Les callbacks engine → backend incluent un retry avec exponential backoff (3 tentatives, 1s/2s/4s) pour résister aux indisponibilités temporaires.
-
-```
-POST /rooms/:id/results           # Game finished, final results
-{
-  scores: [{ playerId, nickname, score, streak, cumulativeTime }],
-  answers: [{ playerId, questionId, correct, timeSpent }]
-}
-
-POST /rooms/:id/question-finished # All active players answered / timer expired
-{
-  question_id: number,
-  correct_choices: number[],
-  results: [{ playerId, nickname, correct, points, bonus, streak, cumulativeTime }]
-}
-
-POST /rooms/:id/next-question     # Feedback delay elapsed, next question available
-{ question_index: number }
-
-POST /rooms/:id/game-finished     # All questions answered, game over
-{}
-```
-
-### Backend result endpoints
-
-```
-GET /rooms/:id/results          # Fetch persisted final results
-# Returns: { result: { id, roomId, mode, createdAt, scores[], answers[] } }
-
-GET /users/me/stats             # Fetch current user aggregated stats (auth)
-# Returns: { stat: { gamesPlayed, totalScore }, themeStats: [{ category, totalAnswered, correctCount, successRate }] }
-
-GET /users/me                   # Fetch current user extended profile (auth)
-# Returns: { user: { id, pseudo, email, role, language, theme, emailVerified, createdAt } }
-
-PATCH /users/me                 # Update pseudo / email (auth)
-# Body: { pseudo?: string, email?: string }
-# Returns: { user: { id, pseudo, email, role, language, theme, emailVerified, createdAt } }
-
-PATCH /users/me/password        # Change password (auth)
-# Body: { currentPassword: string, password: string, confirmPassword: string }
-# Returns: { message: string }
-
-DELETE /users/me                # Delete own account (auth)
-# Body: { password: string }
-# Returns: { message: string }
-
-GET /users                      # List users (QUIZADMIN)
-# Returns: { users: [{ id, pseudo, email, role, totpEnabled, emailVerified, createdAt }] }
-
-PATCH /users/:id                # Edit user pseudo/email/role (QUIZADMIN)
-# Body: { pseudo?: string, email?: string, role?: "USER" | "QUIZMASTER" | "QUIZADMIN" }
-# Returns: { user: { id, pseudo, email, role, totpEnabled, emailVerified, createdAt } }
-
-DELETE /users/:id               # Delete a user (QUIZADMIN, cannot self-delete)
-# Returns: { message: string }
-
-POST /users/:id/reset-password  # Reset user password (QUIZADMIN)
-# Body: { password: string, confirmPassword: string }
-# Returns: { message: string }
-
-POST /users/:id/reset-totp      # Disable user TOTP (QUIZADMIN)
-# Returns: { message: string }
-```
-
-Results persistence:
-- `POST /rooms/:id/results` stores scores and answers in `GameResult`, `PlayerScore`, `PlayerAnswer`.
-- User stats (`UserStat`, `UserThemeStat`) are updated by matching the player's `nickname` to `User.pseudo`.
-
-## Directory layout
-
-```
-services/
-├── web-backend/     # Node + Express
-│   ├── prisma/           # Schema + migrations + seed
-│   └── prisma/generated/ # Prisma Client généré (gitignoré)
-├── frontend/        # React + Vite
-└── quiz-engine/     # Python + FastAPI
-docker-compose.yml
-Makefile
-```
-
-## Dev workflow
-
-- **`make dev`** — `docker compose up` with hot-reload (multi-container)
-- **`make test`** — all tests (Vitest backend/frontend + pytest engine)
-- **`make test-backend`** — `pnpm test` in `services/web-backend`
-- **`make test-frontend`** — `pnpm test` in `services/frontend`
-- **`make test-engine`** — `pytest -v` in `services/quiz-engine`
-- **`make lint`** — Prettier check (frontend), ruff (Python), ESLint (backend)
-- **`make lint-engine`** — `ruff check src/ tests/`
-- **`make typecheck`** — tsc (frontend), mypy (engine)
-- **`make typecheck-engine`** — `mypy src/`
-
-### Test coverage
-
-| Service | Tests | Files | Stack |
-|---|---|---|---|
-| Web backend | 180 | 17 | Vitest, mocks Prisma/fetch/Socket.IO |
-| Frontend | 10 | 5 | Vitest + React Testing Library + jsdom (UI tests additionnels prévus) |
-| Quiz engine | 39 | 2 | pytest + pytest-asyncio |
-
-Backend : tous les contrôleurs, middlewares et librairies sont testés (auth, questions, categories, upload, reports, rooms, users, results, room-events, engine-client, socket, JWT/jose, validation, errors, rate-limit).
-Frontend : setup Vitest + RTL avec `src/test/utils.tsx` (wrapper providers Router/i18n/Auth/Theme), premiers tests des composants atomiques et pages.
-
-## Frontend pages
-
-| Route | Page | Content |
+| Component | Tech | Role |
 |---|---|---|
-| `/` | Home | Title + "Create a room" button + nickname field + "Join" button |
-| `/room/create` | Creation | Mode (solo/multi private/multi public), question count (10/20/50/custom with multi-category pseudo-random selection), category, difficulty, nickname (if not auth'd), "Include my private questions" toggle (if quizmaster+), random code + invite link (multiplayer only) |
-| `/room/:id` | Room | Pre-game (code, creator auto-join, share link visible only to creator, players incl. disconnected status, start), game (QCM + media, timer 30s, green/red feedback + explanation), end (scoreboard + animation) |
-| `/train` | Solo training | Solo sessions on weak themes (based on user stats) |
-| `/profile` | User profile | Edit account (pseudo/email/password), preferences, stats, delete account |
-| `/admin` | Admin dashboard | Overview cards: questions/users/categories counts, shortcuts |
-| `/admin/questions` | Questions list | Filter by category/difficulty/visibility; edit/delete own questions (quizmaster+) / all (quizadmin) |
-| `/admin/questions/new` | Create question | Full question form with media upload + audio recorder |
-| `/admin/questions/:id/edit` | Edit question | Same form, pre-filled; author or quizadmin only |
-| `/admin/users` | Users management | QUIZADMIN only: change user roles |
-| `/admin/categories` | Categories management | QUIZADMIN only: add/delete categories |
+| Backend | Node.js + Express + TypeScript | REST API, auth (JWT), CRUD, WebSocket (Socket.IO) |
+| Game engine | TypeScript (in-process, `src/engine/`) | Room lifecycle, scoring, answer validation |
+| Frontend (built) | React + Vite + Tailwind CSS v4 | SPA, i18n, virtual host |
+| Database | PostgreSQL 18 | Users, questions, results, hosts, phrases |
 
-### Notes
+### Dev workflow
 
-- **Interface jeu TV** : l'ensemble de l'UI est conçue comme un plateau de jeu télévisé de culture générale, animé par **Christine** (présentatrice virtuelle). Christine apparaît via des composants dédiés (`ChristineAvatar`, `ChristineBubble`, `ChristinePresenter`) qui affichent des messages contextuels (accueil, félicitations, encouragement, explications) selon le déroulement de la partie.
-- **Christine avatar** : SVG vectoriel avec 5 expressions (`smile`, `focused`, `surprised`, `applause`, `console`), affiché en bas à droite avec bulle de dialogue.
-- **Phrases contextuelles** : Christine réagit au contexte — bonne réponse, erreur, temps écoulé, seul à avoir bon/tort, sans-faute, score faible. Les clés i18n sont dans `christine.*`.
-- **Timer circulaire** : composant `CircularTimer` avec dégradé vert→orange→rouge et animation de pulsation.
-- **Palette TV** : rouge show `#C41E3A`, violet `#6B1E5E`, or `#FFD700`, crème `#FFF8E7`. Polices : `Bebas Neue` (titres) + `Montserrat` (corps).
-- **Multi private**: account required to create, not to join
-- **Questions**: text + optionally audio, video or image
-- **Feedback**: after each question, correct answer + explanation (source links) + player result (green/red)
-- **Timer**: configurable in options, 30s default
-- **Scoreboard**: final ranking with animation
-- **Non-auth room creation**: solo only
-- **Join methods**: code (on home page) or direct link (`/room/:id`)
-- **Max players per room**: 20
-- **Disconnection**: player can rejoin and continue from current question
-- **Question order**: same random shuffle for all players in a room
+- **`Dockerfile.dev`** — Single container runs both backend (`pnpm dev`) and frontend (`npm run dev`) via `concurrently`, with hot-reload volume mounts.
+- **`Dockerfile`** — 3-stage production build: frontend builder → backend builder → runtime. Express serves API + built frontend from `./frontend/dist`.
+- **`docker-compose.yml`** — Dev: `postgres` + `app`. Volumes for hot-reload.
+- **`docker-compose.prod.yml`** — Prod: `postgres` + `app`. Healthchecks, restart policies, configurable ports via `${VAR}`.
+- **Entrypoint** (`docker-entrypoint.prod.sh`) — Wait for DB (max 15 retries) → `prisma migrate deploy` → `node dist/index.js`.
+
+### Makefile
+
+| Command | Action |
+|---|---|
+| `make dev` | Docker compose up (dev) |
+| `make prod-up` | Docker compose up (prod, daemon) |
+| `make test` | Backend + frontend tests |
+| `make test-backend` | `pnpm test` in `services/web-backend` |
+| `make test-frontend` | `npm test` in `services/frontend` |
+| `make lint` | Frontend + backend lint |
+| `make typecheck` | Frontend + backend typecheck |
+
+### Directory layout
+
+```
+quizztine/
+├── services/
+│   ├── web-backend/           # Express API + in-process game engine
+│   │   ├── prisma/                # Schema, migrations, seed
+│   │   │   └── generated/         # Prisma Client (gitignored)
+│   │   └── src/
+│   │       ├── controllers/       # Route handlers (auth, host, questions, rooms, …)
+│   │       ├── engine/            # In-process game engine
+│   │       │   ├── types.ts
+│   │       │   ├── room-store.ts
+│   │       │   ├── game-flow.ts
+│   │       │   ├── scoring.ts
+│   │       │   ├── answer-validator.ts
+│   │       │   ├── notifications.ts
+│   │       │   ├── index.ts       # gameEngine facade
+│   │       │   └── __tests__/
+│   │       ├── lib/               # jwt, logger, prisma, socket, validation, …
+│   │       ├── middleware/        # auth, rate-limit, error-handler, upload
+│   │       ├── routes/            # Express route definitions
+│   │       ├── types/             # Shared types & errors
+│   │       ├── test/              # Shared test utilities
+│   │       ├── config/
+│   │       ├── app.ts
+│   │       └── index.ts           # Entry point
+│   └── frontend/              # React SPA
+│       └── src/
+│           ├── components/
+│           │   ├── host/          # HostAvatar, HostBubble, HostPresenter, AvatarRenderer
+│           │   ├── room/          # RoomGame, RoomPreGame, RoomReady, RoomScoreboard
+│           │   └── ui/            # Button, Card, CycleSelect, Input, Section, Select
+│           ├── pages/             # Home, Login, Register, RoomCreate, RoomPage, Profile,
+│           │                      # Train, AdminDashboard, AdminQuestions(+/new/:id/edit),
+│           │                      # AdminUsers, AdminCategories, AdminHosts
+│           └── lib/               # api, auth, i18n, socket, theme, HostProvider,
+│                                  # PhrasesProvider, useRoomGame, useGameTimer,
+│                                  # useHostMessages, useRoomGameTypes
+├── docker-compose.yml             # Dev
+├── docker-compose.prod.yml        # Production
+├── Dockerfile                     # Multi-stage production build
+├── Dockerfile.dev                 # Dev with hot-reload
+├── Makefile
+└── .env.example
+```
+
+**Archived / dead code:**
+- `services/quiz-engine/` — Python FastAPI service, replaced by the in-process TypeScript engine. Directory kept for reference only; not wired into Docker Compose.
+
+### Key architectural decisions
+
+- **Mono-container, not microservices** — The former Python quiz-engine was ported to TypeScript and runs in-process. This eliminates network hops, simplifies deployment, and removes the Docker networking overhead. Decision rationale: the engine is lightweight (~1400 lines), and scaling can be addressed later if needed.
+- **In-process engine** — `src/engine/` is a self-contained module with its own tests. It communicates with controllers via the `gameEngine` facade (direct function calls, not HTTP).
+- **Socket.IO** — Frontend → backend only. The backend broadcasts game events via Socket.IO; it no longer relays to an external service.
+- **JWT in httpOnly cookies** — XSS-safe. Access token (1h) + refresh token (7d) signed with `jose` (HS256). Refresh token blacklist in DB (SHA-256 hashed, auto-purge every hour).
+- **Structured logging** — `pino` for backend, `pino-http` middleware for request logging. `LOG_LEVEL` env var configures verbosity.
+- **Graceful shutdown** — `SIGTERM`/`SIGINT` handler closes HTTP server, disconnects Socket.IO, cancels room timers, disconnects Prisma. No dangling connections.
+
+## Stack details
+
+### Backend (web-backend)
+
+**Express + TypeScript**. Structure: routes → controllers → lib/middleware. Tests: Vitest (~262 tests).
+
+**Auth:**
+- Pseudo + email + password (12+ chars, hashed via `bcryptjs`)
+- JWT access token (1h) + refresh token (7d) signed with `jose` (HS256), both httpOnly cookies
+- JWT functions (`signAccessToken`, `signRefreshToken`, `verifyToken`) are asynchronous
+- Refresh token blacklist stored in DB (`RevokedToken` table) with SHA-256 hash, auto-purge every hour
+- Persistent across restarts, scalable multi-instance
+- Login accepts `login` field (email or pseudo), frontend sends `{ login, password }`
+- Rate-limited: 10 req / 15 min per IP on auth endpoints
+
+**Roles** (hierarchical):
+- `USER` — Free registration (valid email required). Sees own stats. Solo training on weak themes (`/train`).
+- `QUIZMASTER` — Can add public/private questions, manage own questions. Promotion via admin dashboard.
+- `QUIZADMIN` — Full management of all questions, users, categories, hosts.
+
+**Cookie security:** `secure` flag set automatically based on `NODE_ENV` — `true` in production, `false` in development.
+
+**JWT secret:** `JWT_SECRET` env var is **required in production**. Startup fails if missing. Dev default via `.env`.
+
+**Rate limiting:**
+- Auth endpoints (`/auth/login`, `/auth/register`): 10 req / 15 min per IP (`express-rate-limit`)
+- Global API: 100 req / 15 min per IP (disabled by default, enable in `app.ts`)
+- Error format: `{ error, code, status, details }` with code `RATE_LIMIT_EXCEEDED`
+
+**Error format:** All API errors: `{ error, code, status, details? }`
+
+**Prisma ORM** (v7 with `@prisma/adapter-pg`):
+- Config: `prisma.config.ts` at service root (not in `package.json`). Uses `defineConfig` from `prisma/config`.
+- Schema: `datasource` has no `url` — connection configured in `prisma.config.ts` and via `PrismaPg` adapter.
+- Generator: `provider = "prisma-client"`, output `./generated/prisma`. Client at `prisma/generated/prisma/` (gitignored).
+- Imports: use relative path `prisma/generated/prisma/client.js`, not `@prisma/client`.
+- Generation: `prisma generate` does not require `DATABASE_URL` (no real DB connection needed).
+- Migrations: `prisma migrate deploy` in production; dev uses `prisma db push`.
+
+**Upload media:**
+- Endpoint: `POST /upload`
+- Allowed extensions: `.jpg`, `.jpeg`, `.png`, `.gif`, `.webp`, `.mp3`, `.wav`, `.ogg`, `.mp4`
+- Filename: UUID via `crypto.randomUUID()` (path traversal prevention)
+- Audio: recorded in browser → cut/compress → preview → upload (≤10s, ≤5 MB)
+- Image: max 10 MB
+- Video: not yet
+
+### Game engine (in-process TypeScript, `src/engine/`)
+
+The game engine lives in `services/web-backend/src/engine/`. It is self-contained with its own tests (~1200 lines of tests across 3 files).
+
+**GameFlow Strategy** (`game-flow.ts`):
+- Abstract `GameFlow` class with `ClassicFlow` implementation
+- To add a game mode (duel, battle royale, marathon):
+  1. Create a subclass of `GameFlow`
+  2. Override `shouldFinishRound()` and `shouldEliminate()`
+  3. Optionally override `onAnswer()`, `finishRound()`, `advanceQuestion()`
+
+**AnswerValidator Strategy** (`answer-validator.ts`):
+- `MCQValidator` implements set-based validation (all correct choices selected, no extras)
+- `VALIDATORS` registry maps question type → validator
+- To add a new question type: create validator class, register in `VALIDATORS`, add enum value in Prisma
+
+**Scoring** (`scoring.ts`):
+- `calculateScore()` returns `{ total, bonus, streak, cumulativeTime }`
+- Base points: easy=10, medium=15, hard=20
+- Multiplayer 3+ bonuses: first correct answer (+5), only one correct (+3)
+- Solo bonus: streak (+1 per consecutive, max +10)
+- No bonus for 2-player mode
+
+**Scoring key behaviors:**
+- Wrong answer: 0 points (no penalty)
+- Tiebreaker: cumulative response time
+- Easter egg: all players with 0 points → special message
+- Timer expired: counted as wrong, "Time's up" shown
+- Race condition: if deadline fires before HTTP answer arrives, returns timeout result (200 OK with `correct: false`) instead of error
+
+**Room store** (`room-store.ts`):
+- In-memory `Map<string, Room>`
+- Expired room cleanup runs every 5 minutes (finished rooms > 2h old)
+- Cleanup on shutdown cancels all timers
+- Sessions lost on restart (acceptable for current scale)
+
+**Server-side clock:** Elapsed time computed from `Date.now() - questionStartedAt` (not from client timestamp), avoiding clock-skew issues across players.
+
+### Frontend (React + Vite + TypeScript)
+
+**SPA** with React Router, i18next, Tailwind CSS v4, Socket.IO client. Tests: Vitest + React Testing Library (~104 tests).
+
+**Key components:**
+- **Host system** — `HostAvatar`, `HostBubble`, `HostPresenter`, `AvatarRenderer`. Replaces the former hardcoded Christine. Avatar rendered via `@vierweb/avataaars` (MIT). 5 expressions (smile, focused, surprised, applause, console) mapped to eye/eyebrow/mouth configs.
+- **`AppHostPresenter`** — Wrapper that injects the active host config from `HostProvider` context. Drop it in any page; it auto-configures the avatar and messages.
+- **Host messages** — `PhrasesProvider` (dynamic phrases from DB with weighted random selection + localStorage caching) + `useHostMessages` hook (phase-based message selection, expression computation). Falls back to i18n `host.*` keys.
+- **`useRoomGame`** — Central hook orchestrating room lifecycle (pre-game → game → feedback → end). Handles socket events, timer, question fetch, answer submission, reconnection, replay. 798 lines — targeted for decomposition.
+- **`useGameTimer`** — Game timer + feedback countdown with clean interval management (extracted from `useRoomGame`).
+- **`useHostMessages`** — Message and expression selection per game phase. 262 lines, 31 tests.
+- **`CircularTimer`** — `requestAnimationFrame` (~60fps) with green→orange→red gradient (thresholds at 10s, 5s). Stops and shows checkmark when `stopped={true}`.
+- **`FeedbackBanner`** — Slide-in notification with result, points, bonus, streak, countdown bar.
+
+**Room flow:**
+- 5 phases: `pre-game` → `ready` (multi replay) → `game` → `feedback` → `end`
+- Solo: auto-join + auto-start. Immediate local feedback on submit (green/red choices via `getChoiceStyle()`, which uses `correctCount` from `?game=true` response).
+- Multi: synchronized rounds. All players see same question. Round ends when all answered or timer expires.
+- Reconnection: `sessionStorage` stores `player-{roomId}`, `nickname-{roomId}`, `creatorPid-{roomId}`. Read on RoomPage mount; if player found in room.players, auto-rejoin via engine API.
+- Disconnect: if `phase === 'waiting'`, player removed from engine. If `phase === 'playing'`, player kept and marked `disconnected`; `all_finished` excludes disconnected.
+- Safety fallback: if `next-question` socket event doesn't arrive after 12s in feedback phase, `fetchQuestion()` is forced.
+- Security: `?game=true` API response hides `isCorrect` in choices. Frontend detects single vs multi-correct via `correctCount` field.
+
+**Multi-choice UI:**
+- Detection via `correctCount > 1` → checkbox style (`rounded-md`) vs radio style (`rounded-full`)
+- 3 pill badges in RoomGame: question number, difficulty (green/amber/rose), points
+
+**i18n:**
+- `i18next` + `react-i18next` + `i18next-browser-languagedetector`
+- Default: `VITE_DEFAULT_LANG` env var (fallback `fr`)
+- Detection: localStorage → `navigator.language` → `VITE_DEFAULT_LANG` → `fr`
+- Files: `src/lib/locales/{fr,en}/translation.json`
+- Single namespace (`translation`), keys grouped by page/component
+- Admin pages prefixed `admin.*`, host messages prefixed `host.*`
+
+**Dark/Light theme:**
+- Tailwind CSS v4 `@custom-variant dark (&:where(.dark, .dark *))` — `.dark` class on `<html>`
+- `ThemeProvider` (React Context) in `src/lib/theme.tsx`
+- Persistence: localStorage (`quizztine-theme`) + user profile via `PATCH /auth/preferences`
+- Initial detection: `prefers-color-scheme: dark` → localStorage → `light` (fallback)
+
+### Host system
+
+**Backend (`controllers/host.ts`):**
+- `Host` model: id, name, avatarType (BUILTIN/UPLOAD/URL), avatarConfig (JSON), avatarUrl, isActive
+- `HostPhrase` model: context, scope, lang, text, priority
+- Zod validation on all CRUD schemas
+- Activation transaction: atomically deactivates other hosts when activating one
+- Fallback: returns hardcoded "Christine" with default avataaars config when no host is active
+- Phrase API: weighted random selection with variable interpolation ({{pseudo}}, {{score}}, etc.)
+- Public endpoints: `GET /host/active`, `GET /host/phrases/random`, `GET /host/phrases/contexts`
+
+**Frontend:**
+- `AvatarRenderer` — Maps 5 expressions to eye/eyebrow/mouth configs for `@vierweb/avataaars`
+- `AdminHostsPage` — Full avatar builder with 8 CycleSelect fields (top, hair, accessories, etc.), spot color picker, upload/URL support, phrase management tab
+
+## HTTP API (REST)
+
+All endpoints are under the backend. No external quiz-engine API.
+
+### Room endpoints
+
+```
+POST   /rooms                              # Create room
+GET    /rooms/code/:code                   # Get room by code
+GET    /rooms/:id                          # Get room state
+POST   /rooms/:id/join                     # Join room
+POST   /rooms/:id/start                    # Start game
+GET    /rooms/:id/current-question         # Current question
+POST   /rooms/:id/answer                   # Submit answer
+GET    /rooms/:id/scoreboard               # Get scoreboard
+POST   /rooms/:id/replay                   # Replay room
+GET    /rooms/:id/results                  # Persisted results
+```
+
+### Question endpoints
+
+```
+GET    /questions                          # List (filterable)
+GET    /questions/:id                      # Get single (?game=true hides correct)
+POST   /questions                          # Create (QUIZMASTER+)
+PATCH  /questions/:id                      # Update
+DELETE /questions/:id                      # Delete
+```
+
+### Host endpoints
+
+```
+GET    /host/active                        # Active host config
+GET    /host/phrases/random                # Random phrase
+GET    /host/phrases/contexts              # Available contexts (QUIZADMIN)
+POST   /host                               # Create (QUIZADMIN)
+PATCH  /host/:id                           # Update (QUIZADMIN)
+DELETE /host/:id                           # Delete (QUIZADMIN)
+POST   /host/:id/fetch-avatar              # Download avatar from URL
+GET    /host/phrases                        # List phrases
+POST   /host/phrases                        # Create phrase
+PATCH  /host/phrases/:id                    # Update phrase
+DELETE /host/phrases/:id                    # Delete phrase
+```
+
+### User endpoints
+
+```
+GET    /users/me                           # Own profile
+PATCH  /users/me                           # Update pseudo/email
+PATCH  /users/me/password                  # Change password
+DELETE /users/me                           # Delete own account
+GET    /users                              # List users (QUIZADMIN)
+PATCH  /users/:id                          # Edit user (QUIZADMIN)
+DELETE /users/:id                          # Delete user (QUIZADMIN)
+POST   /users/:id/reset-password           # Reset password (QUIZADMIN)
+POST   /users/:id/reset-totp               # Disable TOTP (QUIZADMIN)
+GET    /users/me/stats                     # Aggregated stats
+```
+
+### Auth endpoints
+
+```
+POST   /auth/register                      # Register
+POST   /auth/login                         # Login (email or pseudo)
+POST   /auth/logout                        # Logout (clears cookies + blacklists refresh)
+POST   /auth/refresh                       # Refresh access token
+POST   /auth/verify-email                  # Verify email with token
+PATCH  /auth/preferences                   # Update language/theme
+```
+
+### Other endpoints
+
+```
+GET    /health                             # Healthcheck (pings Postgres)
+POST   /upload                             # Upload media file
+POST   /reports                            # Report question error
+GET    /categories                         # List categories
+```
+
+## Game flow
+
+### Solo
+1. Create room (auto-generated code, no creator_player_id)
+2. Auto-join via sessionStorage
+3. Auto-start (no creator check — solo rooms have no `creator_player_id`)
+4. Question displayed with choices + timer
+5. Player selects answer → clicks "Valider" OR timer expires
+6. Local feedback immediately (green/red choices, explanation)
+7. `question-feedback` socket event updates score, starts 5s countdown
+8. `next-question` socket event loads next question
+9. After all questions → scoreboard → replay or home
+
+### Multiplayer
+1. Create room (creator identification via `creatorPid = pseudo-timestamp`)
+2. Wait for players to join (join via code or direct link `/room/:id`)
+3. Creator sees "Share link" (visible only to creator via sessionStorage)
+4. Creator clicks "Start" (other players get 403 `NOT_CREATOR`)
+5. All active players see the same question
+6. Round ends when all active players have answered OR timer expires
+7. Correction shown to everyone for 5 seconds
+8. Next question fetched automatically
+9. Final scoreboard with animation, medals, easter eggs
+
+### Race conditions handled
+- **Deadline vs answer:** If the engine's deadline timer fires before the player's HTTP answer arrives, `submitAnswer` returns `{ correct: false, points: 0 }` (200 OK) instead of a 400 error.
+- **Frontend timeout vs server feedback:** If the frontend submits answer (or times out) and the deadline task has already finished the round, the `answer-error` socket event is ignored if already in feedback phase.
 
 ## Conventions
 
 ### Room creation & creator
+- Backend generates `creatorPlayerId = `${user.pseudo}-${Date.now()}` ``. Only the matching player can start the game.
+- `creatorPid-{roomId}` and `creatorNick-{roomId}` stored in `sessionStorage` on creation; RoomPage auto-joins on load.
+- Share link visible only to creator. Others join via code or direct link.
+- Authenticated nickname: pre-filled from `user.pseudo` when logged in.
 
-- **Creator identification**: web-backend generates `` creatorPlayerId = `${user.pseudo}-${Date.now()}` `` and passes it to quiz-engine as `creator_player_id`. Only the player matching this `player_id` can start the game; others receive 403 `NOT_CREATOR`. Solo rooms have no `creator_player_id`, so no check is performed.
-- **Creator auto-join**: when a room is created, `creatorPid-{roomId}` and `creatorNick-{roomId}` are stored in `sessionStorage`. RoomPage detects them on load and auto-joins the creator via the engine API.
-- **Share link**: visible only to the creator (guarded by `creatorPid` in sessionStorage). Other players join via the code or direct link.
-- **Authenticated nickname**: when a user is logged in, the nickname field is pre-filled from `user.pseudo` and hidden in multiplayer as well as solo.
-
-### Player session & reconnection
-
-- **Session keys** (`sessionStorage`): `player-{roomId}`, `nickname-{roomId}`, `code-{roomId}`, `creatorPid-{roomId}`, `creatorNick-{roomId}`.
-- **PlayerId generation**: client-side as `${nickname}-${Date.now()}` (or `creatorPid` for the creator).
-- **Disconnect behavior**:
-  - During `waiting` phase: player is removed from engine and `player-left` is broadcast via Socket.IO.
-  - During `playing` phase: player is kept in the engine room and marked `disconnected`; player list shows a grey dot. `all_finished` excludes disconnected players so the game can continue.
-  - `beforeunload` and React cleanup emit `player-left` only when `phase !== 'game'`; during a game the player stays in the engine room.
-- **Reconnection**: on RoomPage mount, reads `player-{roomId}` from `sessionStorage`. If the player id is found in `room.players`, it auto-rejoins via the engine API. A disconnected creator can also reconnect using `creatorPid`.
+### Player session
+- Session keys (`sessionStorage`): `player-{roomId}`, `nickname-{roomId}`, `code-{roomId}`, `creatorPid-{roomId}`, `creatorNick-{roomId}`.
+- PlayerId generation: client-side `${nickname}-${Date.now()}`.
+- Stats linked to `userId` via `RoomPlayer` table (not by nickname).
+- Disconnect behavior:
+  - `waiting` phase: player removed, `player-left` broadcast via Socket.IO.
+  - `playing` phase: player kept, marked `disconnected`; grey dot in player list.
+  - `beforeunload` / React cleanup emits `player-left` only when `phase !== 'game'`.
 
 ### General
-
-- Postgres is an external dependency (not in compose for prod; dev compose includes it)
-- Web backend owns auth, DB, and question validation; quiz-engine is stateless regarding auth/roles
-- Quiz-engine holds game sessions in memory only. On restart, active rooms are lost (acceptable).
-- Frontend only talks to web-backend (SPA); backend calls quiz-engine internally
-- Quiz-engine is pure: no concept of user, role, or visibility. Web backend filters questions and sends eligible IDs + correct choices to the engine.
-- JWT stored in httpOnly cookie (XSS safe)
-- WebSocket (Socket.IO): frontend → web-backend only; backend relays events to quiz-engine via internal HTTP
-- Web-backend generates the room code and ID, then transmits the session to quiz-engine
-- At game end, quiz-engine POSTs results to `POST /rooms/:id/results` on the web-backend
-- All API errors follow format: `{ error, code, status, details? }`
-- Logging: structured JSON to stdout/stderr
-- Environment variables: `.env.example` files in each service, actual values via docker-compose / production env
-- Dev: multi-container compose. Prod: single container (Node + Python + built frontend served by Express)
-- Refresh tokens blacklist : persisté en BDD (table `RevokedToken`) au lieu de la mémoire — scale multi-instance
-- Types de questions extensibles via `questionType` (Prisma enum) + `AnswerValidator` pattern (Engine)
-- Prisma config : `prisma.config.ts` à la racine du service web-backend (pas dans `package.json`). Client généré dans `prisma/generated/prisma/`
+- JWT in httpOnly cookie (XSS safe).
+- Structured error responses: `{ error, code, status, details? }`.
+- Logging: pino structured JSON to stdout/stderr.
+- Env vars: `.env.example` at project root, values via docker-compose or production env.
+- All Prisma models use auto-generated UUIDs (`@default(uuid())`).
+- Question choices: JSON array with `{ id, text, isCorrect }` — `isCorrect` stripped in `?game=true` responses.
 
 ## Version matrix
 
-Versions actuelles des outils utilisés dans le projet (Docker et host) :
-
-| Composant | Version | Image / Source |
+| Component | Version | Notes |
 |---|---|---|
-| Node.js (backend) | 26 (slim) | `node:26-slim` |
-| Node.js (frontend) | 26 (alpine) | `node:26-alpine` |
-| pnpm (backend) | latest | `pnpm@latest` dans Dockerfile |
-| npm (frontend) | latest (bundled) | vient avec `node:26-alpine` |
-| Python (engine) | 3.14 | `python:3.14-slim` |
-| pip (engine) | latest (bundled) | vient avec `python:3.14-slim` |
-| PostgreSQL | 18 | `postgres:18-alpine` |
-| Prisma | 7.8.0 | `prisma@7.8.0` + `@prisma/client@7.8.0` |
+| Node.js | 24 (slim) | Docker image, matches local dev |
+| pnpm | latest | Backend package manager |
+| npm | latest (bundled) | Frontend package manager |
+| PostgreSQL | 18-alpine | Docker image |
+| Prisma | 7.8.0 | `@prisma/client` + `@prisma/adapter-pg` |
+| React | 19 | Frontend |
+| TypeScript | 7.0.2 | Both backend and frontend |
 
-Le projet utilise **pnpm** pour le backend et **npm** pour le frontend. Les versions des dépendances npm/Python suivent les `^` / `>=` dans leurs fichiers de lock respectifs.
+## Test coverage
 
-## Ports
+| Module | Tests (approx.) | Notes |
+|---|---|---|
+| Backend controllers | ~200 (11 test files) | Auth, categories, host, profile, questions, reports, results, room-events, rooms, upload, users |
+| Backend lib | ~40 (3 test files) | JWT, validation, socket |
+| Backend engine | ~65 (3 test files) | Game flow, room store, scoring |
+| **Backend total** | **~262** (17 test files) | Vitest |
+| Frontend | ~104 (12 test files) | Vitest + RTL. Gaps: useRoomGame (0 tests) |
+| Quiz engine (Python, archived) | 39 (3 test files) | Preserved for reference |
 
-| Service | Port |
-|---|---|
-| Frontend (Vite dev) | 5173 |
-| Web backend | 3000 |
-| Quiz engine | 8001 (host) / 8000 (container) |
+### Notable test gaps
+- `useRoomGame` hook (798 lines) — **0 tests** (core game orchestration)
+- `AdminHostsPage` (1564 lines) — **0 tests** (complex admin UI)
+- `PhrasesProvider` — 6 tests covering only i18n fallback, not DB loading or caching
+- `fetchAvatar` (host controller) — untested
+- `notifications.ts` (engine) — untested
 
-## Internationalization (i18n)
+## Known gaps / unimplemented features
 
-- **Frontend only**. Backend error messages stay in English (API contract).
-- **Library**: `i18next` + `react-i18next` + `i18next-browser-languagedetector`
-- **Default language**: `VITE_DEFAULT_LANG` env var (fallback `fr`)
-- **Detection order**: localStorage (user choice) → navigator.language → VITE_DEFAULT_LANG → `fr`
-- **Language files**: `src/lib/locales/{fr,en}/translation.json`
-- **Structure**: single namespace (`translation`), keys grouped by page/component (e.g. `home.title`, `room.game.submit`)
-- **Language switcher**: dropdown in Layout header, persists to localStorage + user profile via `PATCH /auth/preferences`
-- **Admin pages** (`/admin/*`) are included in i18n; keys prefixed `admin.*`
-- **Adding a language**: create new folder `src/lib/locales/{lang}/translation.json`, mirror key structure
-
-## Light/dark theme
-
-- **Mechanism**: Tailwind CSS v4 `@custom-variant dark (&:where(.dark, .dark *))` — `.dark` class on `<html>`
-- **Provider**: `ThemeProvider` (React Context) in `src/lib/theme.tsx`
-- **Persistence**: localStorage (`quizztine-theme`) + user profile via `PATCH /auth/preferences`
-- **Initial detection**: `prefers-color-scheme: dark` → localStorage → `light` (fallback)
-- **Toggle**: `ThemeSwitcher` (sun/moon icon, no i18n text) in Layout header, next to `LanguageSwitcher`; saves to backend when authenticated
-- **Scope**: all pages (Layout + HomePage + LoginPage + RegisterPage + RoomCreatePage + RoomPage + TrainPage + AdminLayout + admin pages)
-- **Color mapping**: bg-white → dark:bg-gray-800, bg-gray-50 → dark:bg-gray-950, text-gray-900 → dark:text-gray-100, etc.
+| Feature | Status | Details |
+|---|---|---|
+| Email sending | ❌ | Verification token generated and stored but never sent via SMTP |
+| TOTP enrollment UI | ❌ | Schema exists, admin reset works, but user enrollment flow missing |
+| CAPTCHA | ❌ | Placeholder comment only in reports controller |
+| Report error button | ❌ | Backend endpoint exists, frontend button not implemented |
+| Quizmaster invite link | ❌ | Documented feature, not implemented |
+| Max players validation | ❌ | No enforcement (spec says 20) |
+| Video upload | ❌ | Extension allowed, no frontend implementation |
