@@ -20,3 +20,7 @@ session-*.md
 # OS files
 .DS_Store
 Thumbs.db
+
+# Work files
+avatars-preview.html
+CHANGELOG-*.md

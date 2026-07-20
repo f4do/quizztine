@@ -13,14 +13,14 @@ const ALLOWED_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg']
 const createHostSchema = z.object({
   name: z.string().min(1).max(100),
   avatarType: z.enum(['BUILTIN', 'UPLOAD', 'URL']).optional().default('BUILTIN'),
-  avatarConfig: z.any().optional(),
+  avatarConfig: z.object({}).passthrough().optional(),
   avatarUrl: z.string().url().or(z.string().startsWith('/uploads/')).nullable().optional(),
 })
 
 const updateHostSchema = z.object({
   name: z.string().min(1).max(100).optional(),
   avatarType: z.enum(['BUILTIN', 'UPLOAD', 'URL']).optional(),
-  avatarConfig: z.any().optional(),
+  avatarConfig: z.object({}).passthrough().optional(),
   avatarUrl: z.string().url().or(z.string().startsWith('/uploads/')).nullable().optional(),
   isActive: z.boolean().optional(),
 })
