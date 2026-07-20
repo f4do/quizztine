@@ -15,7 +15,7 @@ router.get('/host/phrases/random', getRandomPhrase)
 router.get('/host/phrases/contexts', authMiddleware, requireRole('QUIZADMIN'), getPhraseContexts)
 router.get('/host/phrases', authMiddleware, requireRole('QUIZADMIN'), listPhrases)
 router.post('/host/phrases', authMiddleware, requireRole('QUIZADMIN'), createPhrase)
-router.put('/host/phrases/:id', authMiddleware, requireRole('QUIZADMIN'), updatePhrase)
+router.patch('/host/phrases/:id', authMiddleware, requireRole('QUIZADMIN'), updatePhrase)
 router.delete('/host/phrases/:id', authMiddleware, requireRole('QUIZADMIN'), deletePhrase)
 
 // Admin-only host CRUD
@@ -23,7 +23,7 @@ router.get('/host', authMiddleware, requireRole('QUIZADMIN'), listHosts)
 router.post('/host/fetch-avatar', authMiddleware, requireRole('QUIZADMIN'), fetchAvatar)
 router.get('/host/:id', authMiddleware, requireRole('QUIZADMIN'), getHost)
 router.post('/host', authMiddleware, requireRole('QUIZADMIN'), createHost)
-router.put('/host/:id', authMiddleware, requireRole('QUIZADMIN'), updateHost)
+router.patch('/host/:id', authMiddleware, requireRole('QUIZADMIN'), updateHost)
 router.delete('/host/:id', authMiddleware, requireRole('QUIZADMIN'), deleteHost)
 
 export default router
