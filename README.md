@@ -1,145 +1,148 @@
-# Quizztine 🎯
+# Quizztine
 
-Quizztine est une application de quiz en ligne multi/solo, conçue comme un plateau de jeu télévisé animé par un **présentateur virtuel** personnalisable. Créez des salons, jouez en solo pour vous entraîner, ou affrontez vos amis en temps réel.
+Real-time multiplayer quiz with a customizable virtual TV host. Solo or up to 20 players.
 
-![Quizztine](https://img.shields.io/badge/version-2.5.0-blue)
+![Version](https://img.shields.io/badge/version-1.0.0-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
 ---
 
-## Fonctionnalités
+## Features
 
-- **Solo** — Entraînement sur vos thèmes faibles, avec streak bonus
-- **Multiplayer** — Jusqu'à 20 joueurs, rounds synchronisés, score en temps réel
-- **Présentateur virtuel** — Personnalisez l'avatar, les expressions et les messages d'accueil
-- **Questions** — QCM avec médias (image/audio), catégories, difficultés, explications
-- **Administration** — Crud questions, utilisateurs, catégories, présentateurs
-- **i18n** — Français et anglais inclus, extensible
-- **Thème dark/light** — Détection automatique + persistance
-- **Docker** — Déploiement mono-conteneur prêt pour la production
+- **Solo** — Practice on your weak topics, with streak bonuses
+- **Multiplayer** — Up to 20 players, synchronized rounds, real-time scoring
+- **Virtual host** — Customizable avatar, expressions, and welcome messages
+- **Questions** — Multiple-choice with media (image/audio), categories, difficulty levels, explanations
+- **Administration** — Manage questions, users, categories, and hosts
+- **i18n** — French and English included, easy to extend
+- **Dark/Light theme** — Auto-detection with persistence
+- **Docker** — Single-container deployment, production-ready
 
-## Démarrage rapide
+## Quick start
 
 ```bash
-# Développement (hot-reload)
+# Development (hot-reload)
 docker compose up
 
 # Production
 docker compose -f docker-compose.prod.yml up -d
 ```
 
-Accédez à l'application : [http://localhost:3000](http://localhost:3000) (production) ou [http://localhost:5173](http://localhost:5173) (développement frontend).
+Open [http://localhost:3000](http://localhost:3000) (production) or [http://localhost:5173](http://localhost:5173) (frontend dev).
 
-### Comptes pré-configurés (développement)
+### Pre-configured accounts (development)
 
-| Pseudo | Rôle | Mot de passe |
+| Username | Role | Password |
 |---|---|---|
 | `user` | User | `user` |
 | `master1` | Quizmaster | `master1` |
-| `admin1` | Quizadmin | `admin1` |
+| `admin1` | Admin | `admin1` |
 
 ## Architecture
 
-Quizztine fonctionne dans un **conteneur unique** (Node.js 24) qui sert à la fois l'API backend et les fichiers statiques du frontend.
+Quizztine runs in a **single container** (Node.js 24) that serves both the Express API and the built frontend static files.
 
 ```
-┌──────────────┐     ┌──────────────────┐     ┌──────────────┐
-│   Navigateur │────▶│   Express (API)  │────▶│   Postgres   │
-│  (React SPA) │     │   + Socket.IO    │     │              │
-│              │◀────│   + Engine (in-  │◀────│              │
-│              │     │     process)     │     │              │
-└──────────────┘     │   + Frontend     │     └──────────────┘
-                     │     statique     │
-                     └──────────────────┘
+Browser (React SPA) → Express (API + Socket.IO) → in-process game engine → Postgres
+                   → Express (serves frontend static files)
 ```
 
-### Services
+### Components
 
-| Composant | Technologie | Rôle |
+| Component | Tech | Role |
 |---|---|---|
-| **Backend** | Node.js + Express + TypeScript | API REST, auth JWT, CRUD, WebSocket (Socket.IO) |
-| **Moteur de jeu** | TypeScript (in-process) | Logique de salon, scoring, validation, rounds |
-| **Frontend** | React + Vite + Tailwind CSS v4 | SPA avec présentateur virtuel, i18n, thème |
-| **Base de données** | PostgreSQL 18 via Prisma 7 | Utilisateurs, questions, résultats, hôtes |
+| **Backend** | Node.js + Express + TypeScript | REST API, JWT auth, CRUD, WebSocket |
+| **Game engine** | TypeScript (in-process) | Room lifecycle, scoring, answer validation |
+| **Frontend** | React + Vite + Tailwind CSS v4 | SPA with virtual host, i18n, dark mode |
+| **Database** | PostgreSQL 18 via Prisma 7 | Users, questions, results, hosts, phrases |
 
-### Points clés
+### Key points
 
-- **Auth** : JWT en httpOnly cookie (access 1h + refresh 7d), blacklist des refresh tokens en BDD (SHA-256)
-- **Sécurité** : bcryptjs, rate limiting (10 req/15min sur auth), CORS configurable
-- **Quiz-engine** : Architecture modulaire — `GameFlow` (Strategy), `AnswerValidator` (Strategy + Registry), `ScoreCalculator` (Protocol)
-- **Présentateur** : Système d'hôte personnalisable (avataaars, upload image, phrases dynamiques)
+- **Auth** : JWT in httpOnly cookies (access 1h + refresh 7d), refresh token blacklist in DB (SHA-256)
+- **Security** : bcryptjs, rate limiting (10 req/15min on auth), configurable CORS
+- **Game engine** : Modular architecture — `GameFlow` (Strategy), `AnswerValidator` (Strategy + Registry), `ScoreCalculator` (Protocol)
+- **Host** : Customizable avatar with expressions, dynamic phrases, image upload
 
 ## Configuration
 
-### Variables d'environnement
+### Environment variables
 
-| Variable | Défaut | Description |
+| Variable | Default | Description |
 |---|---|---|
-| `DATABASE_URL` | `postgresql://postgres:postgres@postgres:5432/quizztine` | URL de connexion PostgreSQL |
-| `JWT_SECRET` | — | **Obligatoire en production** — secret pour signer les JWT |
-| `PORT` | `3000` | Port du serveur Express |
-| `CORS_ORIGIN` | `http://localhost:5173` | Origine autorisée pour CORS |
-| `UPLOAD_DIR` | `uploads` | Dossier de stockage des fichiers uploadés |
-| `LOG_LEVEL` | `info` | Niveau de log (pino) |
-| `NODE_ENV` | `development` | `production` active les sécurités (cookie secure, JWT required) |
-| `VITE_API_URL` | `/api` | URL de l'API (relative en production derrière nginx/Express) |
-| `VITE_SOCKET_URL` | `/` | URL du serveur Socket.IO |
-| `VITE_DEFAULT_LANG` | `fr` | Langue par défaut (fr/en) |
+| `DATABASE_URL` | `postgresql://postgres:postgres@postgres:5432/quizztine` | PostgreSQL connection string |
+| `JWT_SECRET` | — | **Required in production** — JWT signing secret |
+| `PORT` | `3000` | Express server port |
+| `CORS_ORIGIN` | `http://localhost:5173` | Allowed CORS origin |
+| `UPLOAD_DIR` | `uploads` | Media upload directory |
+| `LOG_LEVEL` | `info` | Log verbosity (pino) |
+| `NODE_ENV` | `development` | `production` enables security defaults |
+| `VITE_API_URL` | `/api` | API base URL |
+| `VITE_SOCKET_URL` | `/` | Socket.IO server URL |
+| `VITE_DEFAULT_LANG` | `fr` | Default UI language (fr/en) |
 
-## Développement
+## Development
 
-### Prérequis
+### Prerequisites
 
 - Docker & Docker Compose
-- Node.js 26 (optionnel, pour outils locaux)
 
-### Commandes
+### Commands
 
 ```bash
-make dev          # Démarrage en mode développement (hot-reload)
-make test         # Lance tous les tests
-make test-backend # Tests backend (Vitest)
-make test-frontend# Tests frontend (Vitest)
+make dev          # Start development with hot-reload
+make test         # Run all tests
+make test-backend # Backend tests (Vitest)
+make test-frontend# Frontend tests (Vitest)
 make lint         # Lint (frontend + backend)
-make typecheck    # Vérification TypeScript
+make typecheck    # TypeScript checks
 ```
 
-### Structure du projet
+### Project structure
 
 ```
 quizztine/
 ├── services/
-│   ├── web-backend/       # Backend Express + moteur de jeu
+│   ├── web-backend/       # Express API + game engine
 │   │   ├── src/
-│   │   │   ├── controllers/   # Logique métier
-│   │   │   ├── engine/        # Moteur de jeu in-process
+│   │   │   ├── controllers/   # Route handlers
+│   │   │   ├── engine/        # In-process game engine
 │   │   │   ├── lib/           # Prisma, JWT, validation, socket, logger
 │   │   │   ├── middleware/    # Auth, rate-limit, error, upload
-│   │   │   ├── routes/        # Définition des routes
-│   │   │   └── types/         # Types & erreurs
-│   │   └── prisma/            # Schéma, migrations, seed
-│   └── frontend/              # Application React
+│   │   │   ├── routes/        # Route definitions
+│   │   │   └── types/         # Shared types & errors
+│   │   └── prisma/            # Schema, migrations, seed
+│   └── frontend/              # React SPA
 │       └── src/
-│           ├── components/    # Composants UI (host, room, ui)
-│           ├── pages/         # Pages de l'application
+│           ├── components/    # UI components (host, room, ui)
+│           ├── pages/         # Application pages
 │           └── lib/           # Hooks, providers, i18n, API
-├── docker-compose.yml         # Développement
+├── docker-compose.yml         # Development
 ├── docker-compose.prod.yml    # Production
-├── Dockerfile                 # Build production
-└── Dockerfile.dev             # Build développement
+├── Dockerfile                 # Production build
+└── Dockerfile.dev             # Development build
 ```
 
-## Base de données
+## Database
 
-Les migrations Prisma sont appliquées automatiquement au démarrage (`prisma migrate deploy`). Pour créer une migration :
+Prisma migrations run automatically on startup (`prisma migrate deploy`). To create a new migration:
 
 ```bash
 cd services/web-backend
 pnpm db:migrate
 ```
 
-Le fichier de seed (`prisma/seed.ts`) crée des données de démonstration (utilisateurs, catégories, questions).
+The seed file (`prisma/seed.ts`) creates demo data (users, categories, questions).
 
-## Licence
+## Known gaps
 
-MIT — voir [LICENSE](LICENSE).
+- Email sending (verification tokens are generated but not sent)
+- TOTP enrollment UI (schema and admin reset exist, user flow missing)
+- CAPTCHA (placeholder only)
+- Report error button (backend endpoint exists, no frontend UI)
+- Quizmaster invite link (promotion via admin dashboard only)
+- Max players validation (currently no enforcement)
+- Video upload (extension allowed but not implemented)
+
+## License
+
+MIT — see [LICENSE](LICENSE).
