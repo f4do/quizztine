@@ -1,9 +1,13 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi, afterEach } from 'vitest'
 import { signAccessToken, signRefreshToken, verifyToken, hashToken } from '../jwt.js'
 
 const testPayload = { id: 'test-id', pseudo: 'testuser', email: 'test@test.com', role: 'USER' }
 
 describe('JWT utils', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
   it('signs and verifies access token', async () => {
     const token = await signAccessToken(testPayload)
     expect(typeof token).toBe('string')
@@ -22,6 +26,26 @@ describe('JWT utils', () => {
 
     const decoded = await verifyToken(token)
     expect(decoded.id).toBe('test-id')
+  })
+
+  it('rejects expired access token', async () => {
+    vi.useFakeTimers()
+    const token = await signAccessToken(testPayload)
+
+    // Advance past the 1h expiry
+    vi.setSystemTime(Date.now() + 61 * 60 * 1000)
+
+    await expect(verifyToken(token)).rejects.toThrow()
+  })
+
+  it('rejects expired refresh token', async () => {
+    vi.useFakeTimers()
+    const token = await signRefreshToken(testPayload)
+
+    // Advance past the 7d expiry
+    vi.setSystemTime(Date.now() + 8 * 24 * 60 * 60 * 1000)
+
+    await expect(verifyToken(token)).rejects.toThrow()
   })
 
   it('throws on invalid token', async () => {

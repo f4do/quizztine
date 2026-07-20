@@ -340,7 +340,15 @@ describe('createQuestion', () => {
     const res = mockRes()
     await createQuestion(req, res)
 
-    expect(mockCreate).toHaveBeenCalled()
+    expect(mockCreate).toHaveBeenCalledWith({
+      data: {
+        ...validInput,
+        questionType: 'MCQ',
+        visibility: 'PUBLIC',
+        choices: validInput.choices,
+        authorId: 'admin1',
+      },
+    })
     expect(res.status).toHaveBeenCalledWith(201)
   })
 
@@ -399,8 +407,11 @@ describe('updateQuestion', () => {
     const res = mockRes()
     await updateQuestion(req, res)
 
-    expect(mockUpdate).toHaveBeenCalled()
-    expect(res.json).toHaveBeenCalled()
+    expect(mockUpdate).toHaveBeenCalledWith({
+      where: { id: 3 },
+      data: { text: 'Admin updated', questionType: 'MCQ', visibility: 'PUBLIC' },
+    })
+    expect(res.json).toHaveBeenCalledWith({ question: expect.objectContaining({ text: 'Admin updated' }) })
   })
 
   it('throws ForbiddenError for non-author non-admin', async () => {

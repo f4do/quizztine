@@ -75,15 +75,8 @@ describe('Socket.IO', () => {
     expect(getIO()).toBeDefined()
   })
 
-  it('getIO throws when called before init', () => {
-    // Reset the module-level io variable by closing any server and not re-initializing
-    // We can't easily reset the module state, so we just verify getIO works after init
-    // This test verifies the function exists and throws when io is undefined
-    // Since we cannot easily un-init after createServer, we use a separate approach
-    // The io variable is module-scoped and won't be null after first init in this test suite.
-    // We skip because the single test suite shares the module instance.
-    expect(typeof getIO).toBe('function')
-  })
+  // getIO error path is untestable here because io is module-scoped and
+  // the test suite shares a single module instance after first init.
 
   it('client can connect and join a room', { timeout: 5000 }, async () => {
     const port = await createServer()

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { register, refresh, logout } from '../auth.js'
+import { register, login, refresh, logout } from '../auth.js'
 import { mockReq, mockRes } from '../../test/utils.js'
 import { ValidationError, AuthError } from '../../types/errors.js'
 import type { AuthenticatedRequest } from '../../middleware/auth.js'
@@ -13,6 +13,17 @@ const { mockFindFirst, mockCreate, mockFindUnique, mockRevokedTokenFindUnique, m
     mockRevokedTokenCreate: vi.fn(),
     mockUserUpdate: vi.fn(),
   }))
+
+const { mockBcryptCompare, mockBcryptHash } = vi.hoisted(() => ({
+  mockBcryptCompare: vi.fn(),
+  mockBcryptHash: vi.fn().mockResolvedValue('$2a$12$hashedfake'),
+}))
+
+vi.mock('bcryptjs', () => ({
+  default: { compare: mockBcryptCompare, hash: mockBcryptHash },
+  compare: mockBcryptCompare,
+  hash: mockBcryptHash,
+}))
 
 vi.mock('../../lib/prisma.js', () => ({
   prisma: {
@@ -66,8 +77,17 @@ describe('register', () => {
 
     await register(req, res)
 
-    expect(mockFindFirst).toHaveBeenCalled()
-    expect(mockCreate).toHaveBeenCalled()
+    expect(mockFindFirst).toHaveBeenCalledWith({
+      where: { OR: [{ pseudo: 'alice' }, { email: 'alice@test.com' }] },
+    })
+    expect(mockCreate).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        pseudo: 'alice',
+        email: 'alice@test.com',
+        password: expect.any(String),
+        verificationToken: expect.any(String),
+      }),
+    })
     expect(res.status).toHaveBeenCalledWith(201)
   })
 })
@@ -134,5 +154,73 @@ describe('logout', () => {
     // Should not throw — logout swallows revoke errors
     await expect(logout(req, res)).resolves.toBeUndefined()
     expect(res.clearCookie).toHaveBeenCalled()
+  })
+})
+
+describe('login', () => {
+  const mockUser = {
+    id: 'u1', pseudo: 'alice', email: 'alice@test.com',
+    password: '$2a$12$hashedfake', role: 'USER', language: 'fr', theme: 'light',
+  }
+
+  it('logs in with email and returns user + cookies', async () => {
+    mockFindUnique.mockResolvedValue(mockUser)
+    mockBcryptCompare.mockResolvedValue(true)
+
+    const req = mockReq({ body: { login: 'alice@test.com', password: 'supersecret1234' } })
+    const res = mockRes()
+
+    await login(req, res)
+
+    expect(mockFindUnique).toHaveBeenCalledWith({ where: { email: 'alice@test.com' } })
+    expect(mockBcryptCompare).toHaveBeenCalledWith('supersecret1234', mockUser.password)
+    expect(res.cookie).toHaveBeenCalledWith('access_token', expect.any(String), expect.objectContaining({ httpOnly: true }))
+    expect(res.cookie).toHaveBeenCalledWith('refresh_token', expect.any(String), expect.objectContaining({ httpOnly: true }))
+    expect(res.json).toHaveBeenCalledWith({
+      user: { id: 'u1', pseudo: 'alice', email: 'alice@test.com', role: 'USER', language: 'fr', theme: 'light' },
+    })
+  })
+
+  it('logs in with pseudo (falls back from email lookup)', async () => {
+    mockFindUnique
+      .mockResolvedValueOnce(null)   // email lookup fails
+      .mockResolvedValueOnce(mockUser)  // pseudo lookup succeeds
+    mockBcryptCompare.mockResolvedValue(true)
+
+    const req = mockReq({ body: { login: 'alice', password: 'supersecret1234' } })
+    const res = mockRes()
+
+    await login(req, res)
+
+    expect(mockFindUnique).toHaveBeenNthCalledWith(1, { where: { email: 'alice' } })
+    expect(mockFindUnique).toHaveBeenNthCalledWith(2, { where: { pseudo: 'alice' } })
+    expect(res.json).toHaveBeenCalled()
+  })
+
+  it('throws AuthError when user is not found', async () => {
+    mockFindUnique.mockResolvedValue(null)
+
+    const req = mockReq({ body: { login: 'unknown@test.com', password: 'secret' } })
+    const res = mockRes()
+
+    await expect(login(req, res)).rejects.toThrow(AuthError)
+    expect(mockBcryptCompare).not.toHaveBeenCalled()
+  })
+
+  it('throws AuthError when password is wrong', async () => {
+    mockFindUnique.mockResolvedValue(mockUser)
+    mockBcryptCompare.mockResolvedValue(false)
+
+    const req = mockReq({ body: { login: 'alice@test.com', password: 'wrongpassword' } })
+    const res = mockRes()
+
+    await expect(login(req, res)).rejects.toThrow(AuthError)
+  })
+
+  it('throws ValidationError on invalid input (empty body)', async () => {
+    const req = mockReq({ body: {} })
+    const res = mockRes()
+
+    await expect(login(req, res)).rejects.toThrow(ValidationError)
   })
 })

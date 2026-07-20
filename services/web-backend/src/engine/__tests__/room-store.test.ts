@@ -34,8 +34,7 @@ describe('RoomStore', () => {
 
   it('generates a UUID when no id is provided', () => {
     const room = store.create(baseRoom({ id: undefined }))
-    expect(room.id).toBeDefined()
-    expect(room.id.length).toBeGreaterThan(0)
+    expect(room.id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/)
   })
 
   it('gets a room by ID', () => {
