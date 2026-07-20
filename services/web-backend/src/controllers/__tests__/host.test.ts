@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { listHosts, getActiveHost, getHost, createHost, updateHost, deleteHost, listPhrases, getPhraseContexts, getRandomPhrase, createPhrase, updatePhrase, deletePhrase } from '../host.js'
+import { listHosts, getActiveHost, getHost, createHost, updateHost, deleteHost, fetchAvatar, listPhrases, getPhraseContexts, getRandomPhrase, createPhrase, updatePhrase, deletePhrase } from '../host.js'
 import { mockReq, mockRes } from '../../test/utils.js'
+import crypto from 'crypto'
 import { AppError } from '../../types/errors.js'
 
 const { mockFindMany, mockFindUnique, mockFindFirst, mockCreate, mockUpdate, mockUpdateMany, mockDelete, mockTransaction, mockHostPhraseFindMany, mockHostPhraseFindUnique, mockHostPhraseFindFirst, mockHostPhraseCreate, mockHostPhraseUpdate, mockHostPhraseDelete } = vi.hoisted(() => ({
@@ -18,6 +19,18 @@ const { mockFindMany, mockFindUnique, mockFindFirst, mockCreate, mockUpdate, moc
   mockHostPhraseCreate: vi.fn(),
   mockHostPhraseUpdate: vi.fn(),
   mockHostPhraseDelete: vi.fn(),
+}))
+
+const { mockMkdir, mockWriteFile } = vi.hoisted(() => ({
+  mockMkdir: vi.fn().mockResolvedValue(undefined),
+  mockWriteFile: vi.fn().mockResolvedValue(undefined),
+}))
+
+vi.mock('fs/promises', () => ({
+  default: {
+    mkdir: mockMkdir,
+    writeFile: mockWriteFile,
+  },
 }))
 
 vi.mock('../../lib/prisma.js', () => ({
@@ -598,5 +611,101 @@ describe('deletePhrase', () => {
       new AppError(404, 'PHRASE_NOT_FOUND', 'Phrase not found'),
     )
     expect(mockHostPhraseDelete).not.toHaveBeenCalled()
+  })
+})
+
+describe('fetchAvatar', () => {
+  beforeEach(() => {
+    vi.stubGlobal('fetch', vi.fn())
+    vi.spyOn(crypto, 'randomUUID').mockReturnValue('mock-uuid')
+  })
+
+  describe('SSRF protection', () => {
+    it('rejects request to 127.0.0.1', async () => {
+      const req = mockReq({ body: { url: 'http://127.0.0.1/admin' } })
+      const res = mockRes()
+
+      await expect(fetchAvatar(req, res)).rejects.toThrow(
+        new AppError(400, 'SSRF_BLOCKED', 'URL points to a private or reserved address'),
+      )
+    })
+
+    it('rejects request to localhost', async () => {
+      const req = mockReq({ body: { url: 'http://localhost:8080' } })
+      const res = mockRes()
+
+      await expect(fetchAvatar(req, res)).rejects.toThrow(
+        new AppError(400, 'SSRF_BLOCKED', 'URL points to a private or reserved address'),
+      )
+    })
+
+    it('rejects request to 192.168.x.x address', async () => {
+      const req = mockReq({ body: { url: 'http://192.168.1.1' } })
+      const res = mockRes()
+
+      await expect(fetchAvatar(req, res)).rejects.toThrow(
+        new AppError(400, 'SSRF_BLOCKED', 'URL points to a private or reserved address'),
+      )
+    })
+  })
+
+  describe('URL validation', () => {
+    it('rejects non-URL string', async () => {
+      const req = mockReq({ body: { url: 'not-a-url' } })
+      const res = mockRes()
+
+      await expect(fetchAvatar(req, res)).rejects.toThrow()
+    })
+
+    it('rejects empty body', async () => {
+      const req = mockReq({ body: {} })
+      const res = mockRes()
+
+      await expect(fetchAvatar(req, res)).rejects.toThrow()
+    })
+  })
+
+  describe('download failure', () => {
+    it('throws DOWNLOAD_FAILED when fetch returns non-ok status', async () => {
+      vi.mocked(fetch).mockResolvedValue({
+        ok: false,
+        status: 404,
+        headers: new Map(),
+        arrayBuffer: vi.fn(),
+      } as unknown as Response)
+
+      const req = mockReq({ body: { url: 'https://example.com/avatar.png' } })
+      const res = mockRes()
+
+      await expect(fetchAvatar(req, res)).rejects.toThrow(
+        new AppError(400, 'DOWNLOAD_FAILED', 'Failed to download image: 404'),
+      )
+    })
+  })
+
+  describe('happy path', () => {
+    it('downloads image and returns avatar URL', async () => {
+      const imageBuffer = Buffer.from('fake-image-data')
+      vi.mocked(fetch).mockResolvedValue({
+        ok: true,
+        status: 200,
+        headers: { get: () => 'image/png' },
+        arrayBuffer: () => Promise.resolve(imageBuffer.buffer),
+      } as unknown as Response)
+
+      const req = mockReq({ body: { url: 'https://example.com/avatar.png' } })
+      const res = mockRes()
+
+      await fetchAvatar(req, res)
+
+      expect(mockMkdir).toHaveBeenCalledWith('uploads', { recursive: true })
+      expect(mockWriteFile).toHaveBeenCalledWith(
+        'uploads/mock-uuid.png',
+        expect.any(Buffer),
+      )
+      expect(res.json).toHaveBeenCalledWith({
+        avatarUrl: '/uploads/mock-uuid.png',
+      })
+    })
   })
 })
