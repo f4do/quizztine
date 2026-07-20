@@ -11,3 +11,12 @@ prisma/generated/
 *.egg-info/
 session-*.md
 .slim/deepwork/
+
+# Python caches
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+
+# OS files
+.DS_Store
+Thumbs.db
