@@ -4,12 +4,12 @@
   "description": "",
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "build": "typescript7 tsc",
+    "build": "pnpm exec typescript7 tsc",
     "start": "node dist/index.js",
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "eslint src/",
-    "typecheck": "typescript7 tsc --noEmit",
+    "typecheck": "pnpm exec typescript7 tsc --noEmit",
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
     "db:migrate": "prisma migrate dev"

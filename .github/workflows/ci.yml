@@ -27,10 +27,11 @@ jobs:
         run: pnpm prisma generate
         working-directory: services/web-backend
       - name: Install frontend dependencies
-        run: npm install
+        run: pnpm install --ignore-scripts
         working-directory: services/frontend
+
       - name: Lint frontend
-        run: npm run lint
+        run: pnpm lint
         working-directory: services/frontend
       - name: Lint backend
         run: pnpm lint
@@ -53,10 +54,11 @@ jobs:
         run: pnpm prisma generate
         working-directory: services/web-backend
       - name: Install frontend dependencies
-        run: npm install
+        run: pnpm install --ignore-scripts
         working-directory: services/frontend
+
       - name: Typecheck frontend
-        run: npm run typecheck
+        run: pnpm typecheck
         working-directory: services/frontend
       - name: Typecheck backend
         run: pnpm typecheck
@@ -110,7 +112,7 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
       - name: Install dependencies
-        run: pnpm install
+        run: pnpm install --ignore-scripts
         working-directory: services/frontend
       - name: Run tests
         run: pnpm test
