@@ -97,6 +97,7 @@ jobs:
         working-directory: services/web-backend
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/quizztine
+          JWT_SECRET: ci-secret
 
   test-frontend:
     runs-on: ubuntu-latest
