@@ -34,7 +34,9 @@ describe("SetupPage", () => {
   it("renders the setup form", async () => {
     render(<SetupPage />);
     await waitFor(() => {
-      expect(screen.getByRole("heading")).toHaveTextContent(/initial setup|configuration initiale/i);
+      expect(screen.getByRole("heading")).toHaveTextContent(
+        /initial setup|configuration initiale/i,
+      );
     });
   });
 
@@ -43,20 +45,32 @@ describe("SetupPage", () => {
     render(<SetupPage />);
 
     await waitFor(() => {
-      expect(screen.getByRole("textbox", { name: pseudoRegex })).toBeInTheDocument();
+      expect(
+        screen.getByRole("textbox", { name: pseudoRegex }),
+      ).toBeInTheDocument();
     });
 
-    await user.type(screen.getByRole("textbox", { name: pseudoRegex }), "admin");
-    await user.type(screen.getByRole("textbox", { name: /email/i }), "admin@test.com");
+    await user.type(
+      screen.getByRole("textbox", { name: pseudoRegex }),
+      "admin",
+    );
+    await user.type(
+      screen.getByRole("textbox", { name: /email/i }),
+      "admin@test.com",
+    );
 
     const passwordInputs = screen.getAllByLabelText(passwordRegex);
     await user.type(passwordInputs[0], "password123456");
     await user.type(passwordInputs[1], "different123456");
 
-    await user.click(screen.getByRole("button", { name: /configurer|configure/i }));
+    await user.click(
+      screen.getByRole("button", { name: /configurer|configure/i }),
+    );
 
     await waitFor(() => {
-      expect(screen.getByText(/ne correspondent pas|do not match/i)).toBeInTheDocument();
+      expect(
+        screen.getByText(/ne correspondent pas|do not match/i),
+      ).toBeInTheDocument();
     });
     // /auth/setup should NOT be called (client-side validation catches it first)
     expect(mockApi).not.toHaveBeenCalledWith("/auth/setup", expect.anything());
@@ -67,17 +81,27 @@ describe("SetupPage", () => {
     render(<SetupPage />);
 
     await waitFor(() => {
-      expect(screen.getByRole("textbox", { name: pseudoRegex })).toBeInTheDocument();
+      expect(
+        screen.getByRole("textbox", { name: pseudoRegex }),
+      ).toBeInTheDocument();
     });
 
-    await user.type(screen.getByRole("textbox", { name: pseudoRegex }), "admin");
-    await user.type(screen.getByRole("textbox", { name: /email/i }), "admin@test.com");
+    await user.type(
+      screen.getByRole("textbox", { name: pseudoRegex }),
+      "admin",
+    );
+    await user.type(
+      screen.getByRole("textbox", { name: /email/i }),
+      "admin@test.com",
+    );
 
     const passwordInputs = screen.getAllByLabelText(passwordRegex);
     await user.type(passwordInputs[0], "short");
     await user.type(passwordInputs[1], "short");
 
-    await user.click(screen.getByRole("button", { name: /configurer|configure/i }));
+    await user.click(
+      screen.getByRole("button", { name: /configurer|configure/i }),
+    );
 
     await waitFor(() => {
       expect(screen.getByText(/12 caract|12 char/i)).toBeInTheDocument();
@@ -92,25 +116,37 @@ describe("SetupPage", () => {
     let callCount = 0;
     mockApi.mockImplementation((path: string, _options?: RequestInit) => {
       callCount++;
-      if (path === "/auth/me") return Promise.reject(new Error("Not logged in"));
-      if (path === "/auth/setup") return Promise.resolve({ user: { id: "1", role: "QUIZADMIN" } });
+      if (path === "/auth/me")
+        return Promise.reject(new Error("Not logged in"));
+      if (path === "/auth/setup")
+        return Promise.resolve({ user: { id: "1", role: "QUIZADMIN" } });
       return Promise.reject(new Error("Unknown"));
     });
 
     render(<SetupPage />);
 
     await waitFor(() => {
-      expect(screen.getByRole("textbox", { name: pseudoRegex })).toBeInTheDocument();
+      expect(
+        screen.getByRole("textbox", { name: pseudoRegex }),
+      ).toBeInTheDocument();
     });
 
-    await user.type(screen.getByRole("textbox", { name: pseudoRegex }), "admin");
-    await user.type(screen.getByRole("textbox", { name: /email/i }), "admin@test.com");
+    await user.type(
+      screen.getByRole("textbox", { name: pseudoRegex }),
+      "admin",
+    );
+    await user.type(
+      screen.getByRole("textbox", { name: /email/i }),
+      "admin@test.com",
+    );
 
     const passwordInputs = screen.getAllByLabelText(passwordRegex);
     await user.type(passwordInputs[0], "supersecret1234");
     await user.type(passwordInputs[1], "supersecret1234");
 
-    await user.click(screen.getByRole("button", { name: /configurer|configure/i }));
+    await user.click(
+      screen.getByRole("button", { name: /configurer|configure/i }),
+    );
 
     await waitFor(() => {
       expect(mockApi).toHaveBeenCalledWith("/auth/setup", {
@@ -134,25 +170,37 @@ describe("SetupPage", () => {
     const user = userEvent.setup();
 
     mockApi.mockImplementation((path: string) => {
-      if (path === "/auth/me") return Promise.reject(new Error("Not logged in"));
-      if (path === "/auth/setup") return Promise.reject(new Error("Setup already done"));
+      if (path === "/auth/me")
+        return Promise.reject(new Error("Not logged in"));
+      if (path === "/auth/setup")
+        return Promise.reject(new Error("Setup already done"));
       return Promise.reject(new Error("Unknown"));
     });
 
     render(<SetupPage />);
 
     await waitFor(() => {
-      expect(screen.getByRole("textbox", { name: pseudoRegex })).toBeInTheDocument();
+      expect(
+        screen.getByRole("textbox", { name: pseudoRegex }),
+      ).toBeInTheDocument();
     });
 
-    await user.type(screen.getByRole("textbox", { name: pseudoRegex }), "admin");
-    await user.type(screen.getByRole("textbox", { name: /email/i }), "admin@test.com");
+    await user.type(
+      screen.getByRole("textbox", { name: pseudoRegex }),
+      "admin",
+    );
+    await user.type(
+      screen.getByRole("textbox", { name: /email/i }),
+      "admin@test.com",
+    );
 
     const passwordInputs = screen.getAllByLabelText(passwordRegex);
     await user.type(passwordInputs[0], "supersecret1234");
     await user.type(passwordInputs[1], "supersecret1234");
 
-    await user.click(screen.getByRole("button", { name: /configurer|configure/i }));
+    await user.click(
+      screen.getByRole("button", { name: /configurer|configure/i }),
+    );
 
     await waitFor(() => {
       expect(screen.getByText("Setup already done")).toBeInTheDocument();

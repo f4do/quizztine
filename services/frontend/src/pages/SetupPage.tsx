@@ -38,7 +38,13 @@ export default function SetupPage() {
     try {
       await api("/auth/setup", {
         method: "POST",
-        body: JSON.stringify({ pseudo, email, password, confirmPassword, language }),
+        body: JSON.stringify({
+          pseudo,
+          email,
+          password,
+          confirmPassword,
+          language,
+        }),
       });
       navigate("/admin");
     } catch (err) {
@@ -69,7 +75,10 @@ export default function SetupPage() {
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label htmlFor="setup-pseudo" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
+              <label
+                htmlFor="setup-pseudo"
+                className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1"
+              >
                 {t("setup.pseudo")}
               </label>
               <input
@@ -84,7 +93,10 @@ export default function SetupPage() {
               />
             </div>
             <div>
-              <label htmlFor="setup-email" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
+              <label
+                htmlFor="setup-email"
+                className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1"
+              >
                 {t("setup.email")}
               </label>
               <input
@@ -97,7 +109,10 @@ export default function SetupPage() {
               />
             </div>
             <div>
-              <label htmlFor="setup-password" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
+              <label
+                htmlFor="setup-password"
+                className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1"
+              >
                 {t("setup.password")}
               </label>
               <input
@@ -111,7 +126,10 @@ export default function SetupPage() {
               />
             </div>
             <div>
-              <label htmlFor="setup-confirm-password" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
+              <label
+                htmlFor="setup-confirm-password"
+                className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1"
+              >
                 {t("setup.confirm_password")}
               </label>
               <input
