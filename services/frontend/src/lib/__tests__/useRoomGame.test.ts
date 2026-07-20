@@ -17,11 +17,9 @@ const { mockSocket, socketHandlers } = vi.hoisted(() => {
     socketHandlers: handlers,
     mockSocket: {
       emit: vi.fn(),
-      on: vi.fn(
-        (event: string, handler: (...args: any[]) => void) => {
-          handlers[event] = handler;
-        },
-      ),
+      on: vi.fn((event: string, handler: (...args: any[]) => void) => {
+        handlers[event] = handler;
+      }),
       off: vi.fn(),
       connect: vi.fn(),
       disconnect: vi.fn(),
@@ -37,9 +35,7 @@ vi.mock("react-i18next", () => ({
 
 vi.mock("../api", () => ({
   api: vi.fn(),
-  mediaUrl: vi.fn(
-    (url: string | null | undefined) => url ?? null,
-  ),
+  mediaUrl: vi.fn((url: string | null | undefined) => url ?? null),
 }));
 
 vi.mock("../socket", () => ({
@@ -101,7 +97,7 @@ function makeQuestionResponse(overrides: Record<string, unknown> = {}) {
   };
   const mergedQuestion = {
     ...baseQuestion,
-    ...(overrides.question as object || {}),
+    ...((overrides.question as object) || {}),
   };
   const { question: _omit, ...restOverrides } = overrides;
   return {
@@ -217,15 +213,21 @@ describe("useRoomGame", () => {
     hangApi(); // room will never load; we only test the nickname effect
 
     (useAuth as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
-      user: { pseudo: "Alice", id: "u1", email: "a@b.com", role: "USER", language: "fr", theme: "light" },
+      user: {
+        pseudo: "Alice",
+        id: "u1",
+        email: "a@b.com",
+        role: "USER",
+        language: "fr",
+        theme: "light",
+      },
       loading: false,
     });
 
     // Re-render so the useEffect picks up the new user value
-    const { result, rerender } = renderHook(
-      (id: string) => useRoomGame(id),
-      { initialProps: "room-1" },
-    );
+    const { result, rerender } = renderHook((id: string) => useRoomGame(id), {
+      initialProps: "room-1",
+    });
 
     // Need a render cycle for the user effect to fire
     rerender("room-1");
@@ -390,16 +392,16 @@ describe("useRoomGame", () => {
     });
 
     // Second call should bail out because soloStarting is true
-    const callsBefore = (api as unknown as ReturnType<typeof vi.fn>).mock
-      .calls.length;
+    const callsBefore = (api as unknown as ReturnType<typeof vi.fn>).mock.calls
+      .length;
     await act(async () => {
       await result.current.handleSoloStart();
     });
 
     // No additional API calls after the bailed-out start
-    expect(
-      (api as unknown as ReturnType<typeof vi.fn>).mock.calls.length,
-    ).toBe(callsBefore);
+    expect((api as unknown as ReturnType<typeof vi.fn>).mock.calls.length).toBe(
+      callsBefore,
+    );
   });
 
   // ─── 5. SOCKET EVENT: game-started ───────────────────────────────
@@ -418,12 +420,7 @@ describe("useRoomGame", () => {
       question: {
         text: "Hard question?",
         difficulty: "HARD",
-        choices: [
-          { text: "A" },
-          { text: "B" },
-          { text: "C" },
-          { text: "D" },
-        ],
+        choices: [{ text: "A" }, { text: "B" }, { text: "C" }, { text: "D" }],
         mediaUrl: null,
         mediaType: null,
         explanation: "Because",
@@ -617,8 +614,8 @@ describe("useRoomGame", () => {
     // Queue-based mock: each call returns the next item in sequence.
     // This avoids mockResolvedValueOnce interaction quirks.
     const responseQueue: unknown[] = [room, q1, q1Resp, q2, q2Resp];
-    (api as unknown as ReturnType<typeof vi.fn>).mockImplementation(
-      () => Promise.resolve(responseQueue.shift()),
+    (api as unknown as ReturnType<typeof vi.fn>).mockImplementation(() =>
+      Promise.resolve(responseQueue.shift()),
     );
 
     const { result } = renderHook(() => useRoomGame("room-1"));
@@ -657,8 +654,9 @@ describe("useRoomGame", () => {
   // ─── 8. SOCKET EVENT: game-finished ──────────────────────────────
 
   it("handles game-finished: transitions to end and loads scoreboard", async () => {
-    (api as unknown as ReturnType<typeof vi.fn>)
-      .mockResolvedValue(makeRoom({ status: "playing" }));
+    (api as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(
+      makeRoom({ status: "playing" }),
+    );
 
     const { result } = renderHook(() => useRoomGame("room-1"));
 
@@ -681,8 +679,9 @@ describe("useRoomGame", () => {
       },
     ];
 
-    (api as unknown as ReturnType<typeof vi.fn>)
-      .mockResolvedValueOnce(mockScoreboard);
+    (api as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce(
+      mockScoreboard,
+    );
 
     act(() => {
       triggerSocketEvent("game-finished");
@@ -1074,7 +1073,7 @@ describe("useRoomGame", () => {
 
     // Now we have correctCount = 3, total_questions = 3
     expect(result.current.correctCount).toBe(3);
-    // Need to be in end phase for the effect to be visible... 
+    // Need to be in end phase for the effect to be visible...
     // actually perfectScore is just computed from the values
     expect(result.current.perfectScore).toBe(true);
   });
@@ -1087,27 +1086,15 @@ describe("useRoomGame", () => {
     const { result } = renderHook(() => useRoomGame("room-1"));
 
     // Correct choice → emerald
-    const s1 = result.current.getChoiceStyle(
-      0,
-      [0, 2],
-      [true, false, false],
-    );
+    const s1 = result.current.getChoiceStyle(0, [0, 2], [true, false, false]);
     expect(s1).toContain("bg-emerald-100");
 
     // Selected but wrong → rose
-    const s2 = result.current.getChoiceStyle(
-      1,
-      [1],
-      [false, false, false],
-    );
+    const s2 = result.current.getChoiceStyle(1, [1], [false, false, false]);
     expect(s2).toContain("bg-rose-100");
 
     // Not selected and not correct → neutral
-    const s3 = result.current.getChoiceStyle(
-      2,
-      [0],
-      [true, false, false],
-    );
+    const s3 = result.current.getChoiceStyle(2, [0], [true, false, false]);
     expect(s3).toContain("bg-white");
   });
 
