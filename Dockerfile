@@ -47,7 +47,7 @@ COPY --from=backend-builder /app/dist ./dist
 COPY --from=frontend-builder /app/frontend/dist ./frontend/dist
 
 # Copy docker entrypoint
-COPY services/web-backend/docker-entrypoint.sh /app/docker-entrypoint.sh
+COPY services/web-backend/docker-entrypoint.prod.sh /app/docker-entrypoint.sh
 RUN chmod +x /app/docker-entrypoint.sh
 
 EXPOSE 3000
