@@ -25,7 +25,7 @@ RUN pnpm build
 # ── Stage 3: runtime ────────────────────────────────────────────────
 FROM node:24-slim
 
-RUN npm install -g pnpm@latest && apt-get update && apt-get install -y --no-install-recommends curl ca-certificates && rm -rf /var/lib/apt/lists/*
+RUN npm install -g pnpm@11.15.0 && apt-get update && apt-get install -y --no-install-recommends curl ca-certificates && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 

@@ -20,6 +20,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+          cache-dependency-path: |
+            services/web-backend/pnpm-lock.yaml
+            services/frontend/pnpm-lock.yaml
       - name: Install backend dependencies
         run: pnpm install
         working-directory: services/web-backend
@@ -30,10 +34,10 @@ jobs:
         run: pnpm install --ignore-scripts
         working-directory: services/frontend
 
-      - name: Lint frontend
-        run: pnpm lint
+      - name: Lint frontend (prettier)
+        run: pnpm prettier --check src/
         working-directory: services/frontend
-      - name: Lint backend
+      - name: Lint backend (eslint)
         run: pnpm lint
         working-directory: services/web-backend
 
@@ -47,6 +51,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+          cache-dependency-path: |
+            services/web-backend/pnpm-lock.yaml
+            services/frontend/pnpm-lock.yaml
       - name: Install backend dependencies
         run: pnpm install
         working-directory: services/web-backend
@@ -66,20 +74,6 @@ jobs:
 
   test-backend:
     runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres:18-alpine
-        env:
-          POSTGRES_DB: quizztine
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          - 5432:5432
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -88,6 +82,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+          cache-dependency-path: services/web-backend/pnpm-lock.yaml
       - name: Install dependencies
         run: pnpm install
         working-directory: services/web-backend
@@ -98,8 +94,38 @@ jobs:
         run: pnpm test
         working-directory: services/web-backend
         env:
-          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/quizztine
           JWT_SECRET: ci-secret
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.15.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+          cache-dependency-path: |
+            services/web-backend/pnpm-lock.yaml
+            services/frontend/pnpm-lock.yaml
+      - name: Install backend dependencies
+        run: pnpm install
+        working-directory: services/web-backend
+      - name: Generate Prisma client
+        run: pnpm prisma generate
+        working-directory: services/web-backend
+      - name: Install frontend dependencies
+        run: pnpm install --ignore-scripts
+        working-directory: services/frontend
+
+      - name: Build backend
+        run: pnpm build
+        working-directory: services/web-backend
+      - name: Build frontend
+        run: pnpm build
+        working-directory: services/frontend
 
   test-frontend:
     runs-on: ubuntu-latest
@@ -111,6 +137,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+          cache-dependency-path: services/frontend/pnpm-lock.yaml
       - name: Install dependencies
         run: pnpm install --ignore-scripts
         working-directory: services/frontend
