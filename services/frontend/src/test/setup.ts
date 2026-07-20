@@ -1,17 +1,15 @@
 import "@testing-library/jest-dom";
+import { afterEach } from "vitest";
+import { cleanup, act } from "@testing-library/react";
 
-// Suppress unhandled rejections from React 19's internal resolveUpdatePriority
-// (window access) that fire after test teardown — the state update is a no-op
-// on an unmounted tree. Verified via stack trace to avoid masking real errors.
-process.on("unhandledRejection", (reason) => {
-  if (
-    reason instanceof ReferenceError &&
-    reason.message === "window is not defined" &&
-    (reason as { stack?: string }).stack?.includes("resolveUpdatePriority")
-  ) {
-    return; // benign — React 19 internal after test cleanup
-  }
-  console.error("Unhandled Rejection:", reason);
+// Flush pending React microtasks before jsdom teardown to prevent React 19's
+// resolveUpdatePriority from accessing window.event after window is gone.
+// See https://github.com/facebook/react/blob/main/packages/react-dom-bindings/src/client/ReactDOMUpdatePriority.js
+// Known issue: https://github.com/vitest-dev/vitest/issues/7339
+afterEach(async () => {
+  await act(async () => {
+    cleanup();
+  });
 });
 
 // Provide localStorage for jsdom (not available in Node 24 without --localstorage-file flag)
