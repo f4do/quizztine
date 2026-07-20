@@ -1,0 +1,143 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+env:
+  NODE_VERSION: '24'
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: latest
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+          cache-dependency-path: services/web-backend/pnpm-lock.yaml
+
+      - name: Install backend dependencies
+        run: pnpm install
+        working-directory: services/web-backend
+
+      - name: Install frontend dependencies
+        run: npm ci
+        working-directory: services/frontend
+
+      - name: Generate Prisma client
+        run: pnpm prisma generate
+        working-directory: services/web-backend
+
+      - name: Lint backend
+        run: pnpm lint
+        working-directory: services/web-backend
+
+      - name: Lint frontend
+        run: npm run lint
+        working-directory: services/frontend
+
+  typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: latest
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+          cache-dependency-path: services/web-backend/pnpm-lock.yaml
+
+      - name: Install backend dependencies
+        run: pnpm install
+        working-directory: services/web-backend
+
+      - name: Install frontend dependencies
+        run: npm ci
+        working-directory: services/frontend
+
+      - name: Generate Prisma client
+        run: pnpm prisma generate
+        working-directory: services/web-backend
+
+      - name: Typecheck backend
+        run: pnpm typecheck
+        working-directory: services/web-backend
+
+      - name: Typecheck frontend
+        run: npm run typecheck
+        working-directory: services/frontend
+
+  test-backend:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_DB: quizztine
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: latest
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+          cache-dependency-path: services/web-backend/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install
+        working-directory: services/web-backend
+
+      - name: Generate Prisma client
+        run: pnpm prisma generate
+        working-directory: services/web-backend
+
+      - name: Run tests
+        run: pnpm test
+        working-directory: services/web-backend
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/quizztine
+
+  test-frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: services/frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+        working-directory: services/frontend
+
+      - name: Run tests
+        run: npm test
+        working-directory: services/frontend
