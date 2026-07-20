@@ -103,12 +103,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.15.0
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
       - name: Install dependencies
-        run: npm install
+        run: pnpm install
         working-directory: services/frontend
       - name: Run tests
-        run: npm test
+        run: pnpm test
         working-directory: services/frontend

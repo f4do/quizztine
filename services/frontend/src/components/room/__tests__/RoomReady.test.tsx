@@ -4,6 +4,12 @@ import userEvent from "@testing-library/user-event";
 import { render } from "../../../test/utils";
 import RoomReady from "../RoomReady";
 
+// Mock API to prevent AuthProvider/HostProvider from firing async
+// setState after teardown (React 19 + jsdom "window is not defined").
+vi.mock("../../lib/api", () => ({
+  api: vi.fn().mockRejectedValue(new Error("mock")),
+}));
+
 vi.mock("react-i18next", async (importOriginal) => {
   const mod = await importOriginal<typeof import("react-i18next")>();
   return {

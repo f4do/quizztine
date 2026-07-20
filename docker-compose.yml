@@ -37,6 +37,7 @@ services:
       - ./services/frontend/public:/app/frontend/public
       - ./services/frontend/index.html:/app/frontend/index.html
       - ./services/frontend/vite.config.ts:/app/frontend/vite.config.ts
+      - ./services/frontend/vitest.config.ts:/app/frontend/vitest.config.ts
       - uploads:/app/uploads
 
 volumes:
