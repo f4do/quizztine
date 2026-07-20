@@ -1,8 +1,10 @@
 import crypto from 'crypto'
 import fs from 'fs/promises'
+import net from 'net'
 import path from 'path'
 import type { Request, Response } from 'express'
 import { z } from 'zod'
+import { Prisma } from '../../prisma/generated/prisma/client.js'
 import { prisma } from '../lib/prisma.js'
 import { config } from '../config/index.js'
 import type { AuthenticatedRequest } from '../middleware/auth.js'
@@ -10,17 +12,41 @@ import { AppError } from '../types/errors.js'
 
 const ALLOWED_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg']
 
+// SSRF protection: reject requests to private/reserved IP ranges
+function isPrivateIP(hostname: string): boolean {
+  if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1') return true
+  if (net.isIP(hostname)) {
+    const parts = hostname.split('.').map(Number)
+    if (parts.length !== 4) return true
+    // 10.0.0.0/8
+    if (parts[0] === 10) return true
+    // 127.0.0.0/8
+    if (parts[0] === 127) return true
+    // 169.254.0.0/16
+    if (parts[0] === 169 && parts[1] === 254) return true
+    // 172.16.0.0/12
+    if (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) return true
+    // 192.168.0.0/16
+    if (parts[0] === 192 && parts[1] === 168) return true
+  }
+  return false
+}
+
+const fetchAvatarSchema = z.object({
+  url: z.string().url('Invalid URL'),
+})
+
 const createHostSchema = z.object({
   name: z.string().min(1).max(100),
   avatarType: z.enum(['BUILTIN', 'UPLOAD', 'URL']).optional().default('BUILTIN'),
-  avatarConfig: z.object({}).passthrough().optional(),
+  avatarConfig: z.any().optional(),
   avatarUrl: z.string().url().or(z.string().startsWith('/uploads/')).nullable().optional(),
 })
 
 const updateHostSchema = z.object({
   name: z.string().min(1).max(100).optional(),
   avatarType: z.enum(['BUILTIN', 'UPLOAD', 'URL']).optional(),
-  avatarConfig: z.object({}).passthrough().optional(),
+  avatarConfig: z.any().optional(),
   avatarUrl: z.string().url().or(z.string().startsWith('/uploads/')).nullable().optional(),
   isActive: z.boolean().optional(),
 })
@@ -144,7 +170,7 @@ export async function updateHost(req: AuthenticatedRequest, res: Response) {
   const data = updateHostSchema.parse(req.body)
 
   // Build update operations — if setting this host active, deactivate others in the same transaction
-  const ops: any[] = []
+  const ops: Prisma.PrismaPromise<unknown>[] = []
 
   if (data.isActive) {
     ops.push(prisma.host.updateMany({
@@ -247,19 +273,20 @@ export async function deletePhrase(req: AuthenticatedRequest, res: Response) {
 
 // POST /host/fetch-avatar — download an image from URL and store locally
 export async function fetchAvatar(req: AuthenticatedRequest, res: Response) {
-  const { url } = req.body as { url: string }
-  if (!url || typeof url !== 'string') {
-    throw new AppError(400, 'VALIDATION_ERROR', 'URL is required')
-  }
+  const parsed = fetchAvatarSchema.parse(req.body)
+  const url = new URL(parsed.url)
 
-  // Validate URL format
-  try { new URL(url) } catch { throw new AppError(400, 'VALIDATION_ERROR', 'Invalid URL') }
+  // SSRF protection: reject private/reserved IPs
+  if (isPrivateIP(url.hostname)) {
+    throw new AppError(400, 'SSRF_BLOCKED', 'URL points to a private or reserved address')
+  }
 
   // Download the image
   const response = await fetch(url, { signal: AbortSignal.timeout(15000) })
   if (!response.ok) throw new AppError(400, 'DOWNLOAD_FAILED', `Failed to download image: ${response.status}`)
 
-  const contentType = response.headers.get('content-type') || ''
+  const rawContentType = response.headers.get('content-type') || ''
+  const contentType = rawContentType.split(';')[0].trim()
   const buffer = Buffer.from(await response.arrayBuffer())
 
   // Validate content type
