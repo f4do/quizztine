@@ -143,8 +143,9 @@ export async function handleReceiveResults(
 }
 
 /* ── Express handler (parses req/res, delegates to handleReceiveResults) ─ */
-
-export async function receiveResults(req: Request, res: Response) {
+/* NOTE: Dead code — no route mounts this handler. The engine calls
+   handleReceiveResults directly via notifications.ts. */
+export async function receiveResults(req: Request, res: Response) { // dead
   const parsed = resultsSchema.safeParse(req.body)
   if (!parsed.success) {
     throw new ValidationError('Invalid results payload', parsed.error.issues)
