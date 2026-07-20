@@ -23,7 +23,7 @@ Browser (React SPA) → Express (API + Socket.IO) → in-process game engine →
 
 ### Dev workflow
 
-- **`Dockerfile.dev`** — Single container runs both backend (`pnpm dev`) and frontend (`npm run dev`) via `concurrently`, with hot-reload volume mounts.
+- **`Dockerfile.dev`** — Single container runs both backend (`pnpm dev`) and frontend (`pnpm dev`) via `concurrently`, with hot-reload volume mounts.
 - **`Dockerfile`** — 3-stage production build: frontend builder → backend builder → runtime. Express serves API + built frontend from `./frontend/dist`.
 - **`docker-compose.yml`** — Dev: `postgres` + `app`. Volumes for hot-reload.
 - **`docker-compose.prod.yml`** — Prod: `postgres` + `app`. Healthchecks, restart policies, configurable ports via `${VAR}`.
@@ -37,7 +37,7 @@ Browser (React SPA) → Express (API + Socket.IO) → in-process game engine →
 | `make prod-up` | Docker compose up (prod, daemon) |
 | `make test` | Backend + frontend tests |
 | `make test-backend` | `pnpm test` in `services/web-backend` |
-| `make test-frontend` | `npm test` in `services/frontend` |
+| `make test-frontend` | `pnpm test` in `services/frontend` |
 | `make lint` | Frontend + backend lint |
 | `make typecheck` | Frontend + backend typecheck |
 
@@ -104,7 +104,7 @@ quizztine/
 
 ### Backend (web-backend)
 
-**Express + TypeScript**. Structure: routes → controllers → lib/middleware. Tests: Vitest (~262 tests).
+**Express + TypeScript**. Structure: routes → controllers → lib/middleware. Tests: Vitest (~277 tests).
 
 **Auth:**
 - Pseudo + email + password (12+ chars, hashed via `bcryptjs`)
@@ -141,7 +141,7 @@ quizztine/
 
 **Upload media:**
 - Endpoint: `POST /upload`
-- Allowed extensions: `.jpg`, `.jpeg`, `.png`, `.gif`, `.webp`, `.mp3`, `.wav`, `.ogg`, `.mp4`
+- Allowed extensions: `.jpg`, `.jpeg`, `.png`, `.gif`, `.webp`, `.mp3`, `.wav`, `.ogg` (no video yet)
 - Filename: UUID via `crypto.randomUUID()` (path traversal prevention)
 - Audio: recorded in browser → cut/compress → preview → upload (≤10s, ≤5 MB)
 - Image: max 10 MB
@@ -187,13 +187,13 @@ The game engine lives in `services/web-backend/src/engine/`. It is self-containe
 
 ### Frontend (React + Vite + TypeScript)
 
-**SPA** with React Router, i18next, Tailwind CSS v4, Socket.IO client. Tests: Vitest + React Testing Library (~104 tests).
+**SPA** with React Router, i18next, Tailwind CSS v4, Socket.IO client. Tests: Vitest + React Testing Library (~167 tests).
 
 **Key components:**
 - **Host system** — `HostAvatar`, `HostBubble`, `HostPresenter`, `AvatarRenderer`. Replaces the former hardcoded Christine. Avatar rendered via `@vierweb/avataaars` (MIT). 5 expressions (smile, focused, surprised, applause, console) mapped to eye/eyebrow/mouth configs.
 - **`AppHostPresenter`** — Wrapper that injects the active host config from `HostProvider` context. Drop it in any page; it auto-configures the avatar and messages.
 - **Host messages** — `PhrasesProvider` (dynamic phrases from DB with weighted random selection + localStorage caching) + `useHostMessages` hook (phase-based message selection, expression computation). Falls back to i18n `host.*` keys.
-- **`useRoomGame`** — Central hook orchestrating room lifecycle (pre-game → game → feedback → end). Handles socket events, timer, question fetch, answer submission, reconnection, replay. 798 lines — targeted for decomposition.
+- **`useRoomGame`** — Central hook orchestrating room lifecycle (pre-game → game → feedback → end). Handles socket events, timer, question fetch, answer submission, reconnection, replay. 795 lines — 30 integration tests; still targeted for decomposition.
 - **`useGameTimer`** — Game timer + feedback countdown with clean interval management (extracted from `useRoomGame`).
 - **`useHostMessages`** — Message and expression selection per game phase. 262 lines, 31 tests.
 - **`CircularTimer`** — `requestAnimationFrame` (~60fps) with green→orange→red gradient (thresholds at 10s, 5s). Stops and shows checkmark when `stopped={true}`.
@@ -379,12 +379,11 @@ GET    /categories                         # List categories
 | Component | Version | Notes |
 |---|---|---|
 | Node.js | 24 (slim) | Docker image, matches local dev |
-| pnpm | latest | Backend package manager |
-| npm | latest (bundled) | Frontend package manager |
+| pnpm | 11.15.0 | Package manager for both backend and frontend |
 | PostgreSQL | 18-alpine | Docker image |
 | Prisma | 7.8.0 | `@prisma/client` + `@prisma/adapter-pg` |
 | React | 19 | Frontend |
-| TypeScript | 7.0.2 | Both backend and frontend |
+| TypeScript | 6.x / 7.x | Backend: `typescript ^6.0.3` (peer dep transitive via Prisma/ESLint) + `typescript7 npm:typescript@^7.0.2` (compilation). Frontend: `~7.0.2` |
 
 ## Test coverage
 
@@ -393,16 +392,16 @@ GET    /categories                         # List categories
 | Backend controllers | ~200 (11 test files) | Auth, categories, host, profile, questions, reports, results, room-events, rooms, upload, users |
 | Backend lib | ~40 (3 test files) | JWT, validation, socket |
 | Backend engine | ~65 (3 test files) | Game flow, room store, scoring |
-| **Backend total** | **~262** (17 test files) | Vitest |
-| Frontend | ~104 (12 test files) | Vitest + RTL. Gaps: useRoomGame (0 tests) |
+| **Backend total** | **~277** (19 test files) | Vitest |
+| Frontend | ~167 (13 test files) | Vitest + RTL. Gaps: AdminHostsPage (0 tests) |
 | Quiz engine (Python, archived) | 39 (3 test files) | Preserved for reference |
 
 ### Notable test gaps
-- `useRoomGame` hook (798 lines) — **0 tests** (core game orchestration)
 - `AdminHostsPage` (1564 lines) — **0 tests** (complex admin UI)
 - `PhrasesProvider` — 6 tests covering only i18n fallback, not DB loading or caching
 - `fetchAvatar` (host controller) — untested
 - `notifications.ts` (engine) — untested
+- Timer expiry, reconnection, and `handlePlayAgain` in `useRoomGame` — untested paths
 
 ## Known gaps / unimplemented features
 
