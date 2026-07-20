@@ -7,8 +7,8 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
-    "lint": "prettier --check src/ && tsc --noEmit",
-    "typecheck": "tsc --noEmit",
+    "lint": "prettier --check src/ && tsc -b",
+    "typecheck": "tsc -b",
     "test": "vitest run"
   },
   "dependencies": {

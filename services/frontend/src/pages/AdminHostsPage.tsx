@@ -224,12 +224,16 @@ interface PhraseFormState {
   context: string;
   lang: "fr" | "en";
   text: string;
+  priority: number;
+  scope: string;
 }
 
 const EMPTY_PHRASE_FORM: PhraseFormState = {
   context: "",
   lang: "fr",
   text: "",
+  priority: 0,
+  scope: "",
 };
 
 const LANGUAGES = [
@@ -552,10 +556,10 @@ export default function AdminHostsPage() {
     }
   };
 
-  const updateConfig = (key: keyof AvatarConfig, value: string) => {
+  const updateConfig = (key: keyof AvatarConfig, value: string | undefined) => {
     setForm((prev) => ({
       ...prev,
-      avatarConfig: { ...prev.avatarConfig, [key]: value },
+      avatarConfig: { ...prev.avatarConfig, [key]: value ?? "" },
     }));
   };
 
@@ -785,9 +789,6 @@ export default function AdminHostsPage() {
 
   // Merge custom phrases with default i18n entries for contexts without custom phrases
   const phraseDisplayEntries: PhraseDisplayEntry[] = useMemo(() => {
-    // Build set of contexts that already have custom phrases for the active filters
-    const contextsWithCustom = new Set(phrases.map((p) => p.context));
-
     // Start with all custom phrases
     const entries: PhraseDisplayEntry[] = phrases.map((p) => ({
       id: p.id,
@@ -1067,7 +1068,7 @@ export default function AdminHostsPage() {
                           <CycleSelect
                             key={field.key}
                             label={field.label}
-                            value={form.avatarConfig[field.key]}
+                            value={form.avatarConfig[field.key] ?? ""}
                             options={field.values.map((v) => ({
                               value: v,
                               label: v,

@@ -146,8 +146,6 @@ export function useRoomGame(roomId: string): UseRoomGameReturn {
   const reconnectRef = useRef<{ pid: string; nickname: string } | null>(null);
   const roomRef = useRef(room);
   roomRef.current = room;
-  const timeLeftRef = useRef(timeLeft);
-  timeLeftRef.current = timeLeft;
 
   /* ── custom questionId setter (keeps ref in sync) ──────────────── */
   const setQuestionId = (n: number) => {
@@ -214,6 +212,8 @@ export function useRoomGame(roomId: string): UseRoomGameReturn {
     hasAnswered,
     onExpire: onTimerExpire,
   });
+  const timeLeftRef = useRef(timeLeft);
+  timeLeftRef.current = timeLeft;
 
   /* ── effects ────────────────────────────────────────────────────── */
   // Pre-fill nickname from auth

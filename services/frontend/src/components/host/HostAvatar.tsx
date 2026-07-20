@@ -2,7 +2,6 @@ import { mediaUrl } from "../../lib/api";
 import AvatarRenderer, {
   type HostExpression,
   type AvatarConfig,
-  DEFAULT_AVATAR_CONFIG,
 } from "./AvatarRenderer";
 
 interface HostAvatarProps {

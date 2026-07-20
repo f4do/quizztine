@@ -2,10 +2,10 @@
 FROM node:24-slim AS frontend-builder
 
 WORKDIR /app/frontend
-COPY services/frontend/package.json services/frontend/.npmrc ./
-RUN npm install
+COPY services/frontend/package.json services/frontend/pnpm-lock.yaml services/frontend/.npmrc ./
+RUN npm install -g pnpm@11.15.0 && pnpm install --ignore-scripts
 COPY services/frontend/ .
-RUN npm run build
+RUN pnpm run build
 
 # ── Stage 2: build backend ──────────────────────────────────────────
 FROM node:24-slim AS backend-builder
