@@ -23,29 +23,27 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'pnpm'
-          cache-dependency-path: |
-            services/web-backend/pnpm-lock.yaml
-            services/frontend/pnpm-lock.yaml
+          cache-dependency-path: 'services/*/pnpm-lock.yaml'
 
       - name: Install backend dependencies
         run: pnpm install
+        working-directory: services/web-backend
+
+      - name: Generate Prisma client
+        run: pnpm prisma generate
         working-directory: services/web-backend
 
       - name: Install frontend dependencies
         run: pnpm install
         working-directory: services/frontend
 
-      - name: Generate Prisma client
-        run: pnpm prisma generate
-        working-directory: services/web-backend
+      - name: Lint frontend
+        run: pnpm lint
+        working-directory: services/frontend
 
       - name: Lint backend
         run: pnpm lint
         working-directory: services/web-backend
-
-      - name: Lint frontend
-        run: pnpm lint
-        working-directory: services/frontend
 
   typecheck:
     runs-on: ubuntu-latest
@@ -60,29 +58,27 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'pnpm'
-          cache-dependency-path: |
-            services/web-backend/pnpm-lock.yaml
-            services/frontend/pnpm-lock.yaml
+          cache-dependency-path: 'services/*/pnpm-lock.yaml'
 
       - name: Install backend dependencies
         run: pnpm install
+        working-directory: services/web-backend
+
+      - name: Generate Prisma client
+        run: pnpm prisma generate
         working-directory: services/web-backend
 
       - name: Install frontend dependencies
         run: pnpm install
         working-directory: services/frontend
 
-      - name: Generate Prisma client
-        run: pnpm prisma generate
-        working-directory: services/web-backend
+      - name: Typecheck frontend
+        run: pnpm typecheck
+        working-directory: services/frontend
 
       - name: Typecheck backend
         run: pnpm typecheck
         working-directory: services/web-backend
-
-      - name: Typecheck frontend
-        run: pnpm typecheck
-        working-directory: services/frontend
 
   test-backend:
     runs-on: ubuntu-latest
