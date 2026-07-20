@@ -1153,4 +1153,211 @@ describe("useRoomGame", () => {
     expect(getSocket).toHaveBeenCalledWith("room-1");
     expect(mockSocket.emit).toHaveBeenCalledWith("join-room", "room-1");
   });
+
+  // ─── 18. HANDLER: handlePlayAgain (solo) ──────────────────────────
+
+  it("handlePlayAgain replays and restarts solo game", async () => {
+    const room = makeRoom({ mode: "solo", status: "finished" });
+    const currentQ = { question_id: 1, index: 0 };
+    const qResp = makeQuestionResponse();
+
+    // Sequence: mount GET → replay POST → start POST → current-question GET → question GET
+    (api as unknown as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce(room)      // mount fetch
+      .mockResolvedValueOnce(undefined)  // replay POST
+      .mockResolvedValueOnce(undefined)  // start POST
+      .mockResolvedValueOnce(currentQ)   // current-question GET
+      .mockResolvedValueOnce(qResp);     // question GET
+
+    const { result } = renderHook(() => useRoomGame("room-1"));
+
+    await waitFor(() => {
+      expect(result.current.room).toEqual(room);
+    });
+
+    await act(async () => {
+      await result.current.handlePlayAgain();
+    });
+
+    // Phase transitions to game after fetchQuestion
+    await waitFor(() => {
+      expect(result.current.phase).toBe("game");
+    });
+
+    // 1. Replay API called
+    expect(api).toHaveBeenCalledWith("/rooms/room-1/replay", {
+      method: "POST",
+    });
+    // 2. Start API called
+    expect(api).toHaveBeenCalledWith(
+      "/rooms/room-1/start?player_id=",
+      { method: "POST" },
+    );
+    // 3. Socket emitted game-started
+    expect(mockSocket.emit).toHaveBeenCalledWith("game-started", {
+      roomId: "room-1",
+    });
+    // 4. Error is empty
+    expect(result.current.error).toBe("");
+    // 5. isReplaying reset
+    expect(result.current.isReplaying).toBe(false);
+    // 6. Question data loaded
+    expect(result.current.questionText).toBe("Sample question?");
+  });
+
+  // ─── 19. TIMER EXPIRY ─────────────────────────────────────────────
+
+  it("submits empty answer when timer expires", async () => {
+    // Capture the onExpire callback that useGameTimer receives
+    let onExpireCapture: (() => void) | null = null;
+    (useGameTimer as unknown as ReturnType<typeof vi.fn>).mockImplementation(
+      (config: { onExpire: () => void }) => {
+        onExpireCapture = config.onExpire;
+        return {
+          timeLeft: 0,
+          timerExpired: false,
+          clearTimer: vi.fn(),
+          clearFeedbackTimer: vi.fn(),
+          startFeedbackCountdown: vi.fn(),
+          feedbackCountdown: 0,
+        };
+      },
+    );
+
+    const room = makeRoom({ mode: "solo", status: "playing" });
+    (api as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(room);
+
+    const { result } = renderHook(() => useRoomGame("room-1"));
+
+    await waitFor(() => {
+      expect(result.current.room).toEqual(room);
+    });
+
+    // Start the game so we are in "game" phase
+    const currentQ = { question_id: 5, index: 0 };
+    const qResp = makeQuestionResponse();
+    (api as unknown as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce(currentQ)
+      .mockResolvedValueOnce(qResp);
+
+    act(() => {
+      triggerSocketEvent("game-started");
+    });
+
+    await waitFor(() => {
+      expect(result.current.phase).toBe("game");
+    });
+
+    // Simulate timer expiry by invoking the captured callback
+    act(() => {
+      onExpireCapture!();
+    });
+
+    // Answer was submitted with empty choices
+    expect(result.current.hasAnswered).toBe(true);
+    expect(result.current.phase).toBe("feedback");
+    expect(mockSocket.emit).toHaveBeenCalledWith(
+      "answer",
+      expect.objectContaining({
+        roomId: "room-1",
+        selectedChoices: [],
+      }),
+    );
+  });
+
+  // ─── 20. RECONNECTION ─────────────────────────────────────────────
+
+  it("reads stored session data and pre-populates state for reconnection", async () => {
+    const storedPid = "alice-reconnect-456";
+    const storedNick = "Alice";
+    sessionStorage.setItem("player-room-1", storedPid);
+    sessionStorage.setItem("nickname-room-1", storedNick);
+
+    const room = makeRoom({
+      players: [
+        {
+          id: storedPid,
+          nickname: storedNick,
+          score: 0,
+          finished: false,
+          disconnected: false,
+          answered: false,
+        },
+      ],
+      player_count: 1,
+    });
+    setApiDefault(room);
+
+    const { result } = renderHook(() => useRoomGame("room-1"));
+
+    // Initial state reads from sessionStorage (useState initializer)
+    expect(result.current.playerId).toBe(storedPid);
+    expect(result.current.nickname).toBe(storedNick);
+
+    await waitFor(() => {
+      expect(result.current.room).toEqual(room);
+    });
+
+    // Socket was set up
+    expect(getSocket).toHaveBeenCalledWith("room-1");
+
+    // The hook state is ready for reconnection via handleJoin
+    // (playerId and nickname are pre-filled from sessionStorage)
+  });
+
+  it("reconnects via handleJoin using pre-populated playerId from sessionStorage", async () => {
+    const storedPid = "bob-reconnect-789";
+    const storedNick = "Bob";
+    sessionStorage.setItem("player-room-1", storedPid);
+    sessionStorage.setItem("nickname-room-1", storedNick);
+
+    const room = makeRoom({
+      players: [
+        {
+          id: storedPid,
+          nickname: storedNick,
+          score: 0,
+          finished: false,
+          disconnected: false,
+          answered: false,
+        },
+      ],
+      player_count: 1,
+    });
+    // mount fetch → join POST → room re-fetch
+    (api as unknown as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce(room)
+      .mockResolvedValueOnce(undefined) // join POST
+      .mockResolvedValueOnce(room);     // room re-fetch after join
+
+    const { result } = renderHook(() => useRoomGame("room-1"));
+
+    await waitFor(() => {
+      expect(result.current.room).toEqual(room);
+    });
+
+    // handleJoin should use the pre-populated playerId from sessionStorage
+    await act(async () => {
+      await result.current.handleJoin();
+    });
+
+    expect(result.current.joined).toBe(true);
+    expect(result.current.playerId).toBe(storedPid);
+    expect(result.current.nickname).toBe(storedNick);
+
+    // Join API was called with the stored player_id and nickname
+    expect(api).toHaveBeenCalledWith(
+      "/rooms/room-1/join",
+      expect.objectContaining({
+        method: "POST",
+        body: expect.stringContaining(storedPid),
+      }),
+    );
+    // Socket emitted player-joined with the stored data
+    expect(mockSocket.emit).toHaveBeenCalledWith("player-joined", {
+      roomId: "room-1",
+      playerId: storedPid,
+      nickname: storedNick,
+    });
+  });
 });
