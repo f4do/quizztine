@@ -152,7 +152,7 @@ jobs:
     needs: [lint, typecheck, test-backend, build, test-frontend]
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
       packages: write
     steps:
       - uses: actions/checkout@v4
