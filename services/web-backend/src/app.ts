@@ -23,6 +23,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 const app: Express = express()
 
+app.set('trust proxy', 1)
 app.use(cors({ origin: config.corsOrigin, credentials: true }))
 app.use(pinoHttp({ logger }))
 app.use(express.json())
