@@ -5,6 +5,8 @@ WORKDIR /app/frontend
 COPY services/frontend/package.json services/frontend/pnpm-lock.yaml services/frontend/.npmrc ./
 RUN npm install -g pnpm@11.15.0 && pnpm install --ignore-scripts
 COPY services/frontend/ .
+ARG VITE_API_URL=
+ENV VITE_API_URL=$VITE_API_URL
 RUN pnpm run build
 
 # ── Stage 2: build backend ──────────────────────────────────────────
