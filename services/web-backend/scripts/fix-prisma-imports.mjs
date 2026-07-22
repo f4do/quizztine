@@ -8,6 +8,7 @@ function fixImports(filePath) {
   const original = content
   content = content.replace(/from\s+['"](\.\/[^'"]+)['"]/g, (match, specifier) => {
     if (specifier.endsWith('.js')) return match
+    if (specifier.endsWith('.ts')) return match.replace(specifier, specifier.replace(/\.ts$/, '.js'))
     return match.replace(specifier, specifier + '.js')
   })
   if (content !== original) {

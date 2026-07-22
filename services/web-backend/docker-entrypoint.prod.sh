@@ -3,9 +3,10 @@ set -e
 
 echo "Waiting for database..."
 for i in $(seq 1 15); do
+  DB_HOST=$(echo "$DATABASE_URL" | sed -E 's|^.*://[^:]+:[^@]+@([^:/]+).*$|\1|')
   if node -e "
     const net = require('net');
-    const s = net.connect(5432, 'postgres', () => { s.end(); process.exit(0); });
+    const s = net.connect(5432, '$DB_HOST', () => { s.end(); process.exit(0); });
     s.on('error', () => process.exit(1));
   " 2>/dev/null; then
     echo "Database ready!"
