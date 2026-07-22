@@ -1,5 +1,5 @@
 import { Routes, Route, Navigate, useLocation } from "react-router-dom";
-import { useState, useEffect } from "react";
+import { useState, useEffect, createContext } from "react";
 import { AuthProvider } from "./lib/auth";
 import { ThemeProvider } from "./lib/theme";
 import { PhrasesProvider } from "./lib/PhrasesProvider";
@@ -23,6 +23,8 @@ import ProfilePage from "./pages/ProfilePage";
 import ProtectedRoute from "./components/ProtectedRoute";
 import AdminRoute from "./components/AdminRoute";
 
+export const SetupContext = createContext<() => void>(() => {})
+
 function SetupGuard({ children }: { children: React.ReactNode }) {
   const location = useLocation();
   const [needsSetup, setNeedsSetup] = useState<boolean | null>(null);
@@ -41,7 +43,7 @@ function SetupGuard({ children }: { children: React.ReactNode }) {
     return <Navigate to="/setup" replace />;
   }
 
-  return <>{children}</>;
+  return <SetupContext.Provider value={() => setNeedsSetup(false)}>{children}</SetupContext.Provider>;
 }
 
 export default function App() {

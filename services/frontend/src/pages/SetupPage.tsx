@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useState, useContext } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { api } from "../lib/api";
+import { SetupContext } from "../App";
 import Layout from "../components/Layout";
 import { AppHostPresenter } from "../components/host";
 import Card from "../components/ui/Card";
@@ -16,6 +17,7 @@ export default function SetupPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+  const setupDone = useContext(SetupContext);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -46,7 +48,8 @@ export default function SetupPage() {
           language,
         }),
       });
-      navigate("/admin");
+      setupDone();
+      navigate("/admin", { replace: true });
     } catch (err) {
       setError((err as Error).message);
     } finally {
