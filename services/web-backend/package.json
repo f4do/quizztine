@@ -4,7 +4,7 @@
   "description": "",
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "build": "node node_modules/typescript7/bin/tsc",
+    "build": "node node_modules/typescript7/bin/tsc && node scripts/fix-prisma-imports.mjs",
     "start": "node dist/src/index.js",
     "test": "vitest run",
     "test:watch": "vitest",
